@@ -80,6 +80,13 @@ namespace Secsy
             return newCompId;
         }
 
+        /// <summary>
+        /// Create a new <see cref="EntityId"/>
+        /// </summary>
+        /// <param name="comps"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentNullException"></exception>
+        /// <exception cref="UnregisteredComponentException"></exception>
         public ref EntityId NewEntity(params IComponentId[] comps)
         {
             ref EntityId entId = ref NewEnt();
@@ -105,6 +112,12 @@ namespace Secsy
             return ref entId;
         }
 
+        /// <summary>
+        /// Create many entities
+        /// </summary>
+        /// <param name="amount"></param>
+        /// <param name="comps"></param>
+        /// <returns></returns>
         public EntityId[] NewEntities(int amount, params IComponentId[] comps)
         {
             if (amount < 0) return [];
@@ -156,6 +169,12 @@ namespace Secsy
 
         // TODO create batch way of making many entities
 
+        /// <summary>
+        /// Get the <see cref="EntityId"/> from a raw id
+        /// </summary>
+        /// <param name="id"></param>
+        /// <returns></returns>
+        /// <exception cref="InvalidEntityIdException"></exception>
         public ref EntityId Get(long id)
         {
             if (id == 0) return ref EntityId.Null;
@@ -169,8 +188,18 @@ namespace Secsy
             }
         }
 
+        /// <summary>
+        /// Add component to <paramref name="entId"/>
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="entId"></param>
+        /// <param name="compId"></param>
         public void AddComponent<T>(long entId, ComponentId<T> compId)
         {
+            if (entId == 0) return;
+            ref var ent = ref Get(entId);
+            if ((ent.compIds & compId.id) == compId.id) throw new DuplicateComponentException(compId);
+
             lock (_lock)
             {
                 int len = entComponents[entId].Length;
@@ -178,7 +207,7 @@ namespace Secsy
 
                 Span<object?> comps = new(entComponents[entId]);
                 comps[compId.id] = compId.DefaultValue;
-                entityIds[entId].compIds |= compId.id;
+                ent.compIds |= compId.id;
             }
         }
 
@@ -210,6 +239,14 @@ namespace Secsy
             }
         }
 
+        /// <summary>
+        /// Get the component value of type <typeparamref name="T"/> from <paramref name="entId"/>
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="entId"></param>
+        /// <param name="compId"></param>
+        /// <returns></returns>
+        /// <exception cref="InvalidEntityIdException"></exception>
         public T? GetComponentValue<T>(long entId, ComponentId<T> compId)
         {
             if (entId == 0) return default;
@@ -227,6 +264,14 @@ namespace Secsy
             return default;
         }
 
+        /// <summary>
+        /// Remove component from <paramref name="entId"/>
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="entId"></param>
+        /// <param name="compId"></param>
+        /// <returns></returns>
+        /// <exception cref="InvalidEntityIdException"></exception>
         public bool RemoveComponent<T>(long entId, ComponentId<T> compId)
         {
             if (entId == 0) return true;
@@ -251,6 +296,12 @@ namespace Secsy
             return false;
         }
 
+        /// <summary>
+        /// Gets all the components associated to the entity id
+        /// </summary>
+        /// <param name="entId"></param>
+        /// <returns></returns>
+        /// <exception cref="InvalidEntityIdException"></exception>
         public IComponentId[] GetComponents(long entId)
         {
             if (entId == 0) return [];
@@ -278,6 +329,11 @@ namespace Secsy
             }
             return [];
         }
+
+        /// <summary>
+        /// Sets entity with <paramref name="entId"/> to be inactive.  It will be reused later if a new entity is created.
+        /// </summary>
+        /// <param name="entId"></param>
         public void Remove(int entId)
         {
             if (entId <= 0) return; // default(EntityId) is automatically considered inactive.
@@ -314,20 +370,6 @@ namespace Secsy
             }
         }
 
-        public IEnumerator<EntityId> FilterWithInactive(Filter filter)
-        {
-            ConcurrentBag<EntityId> ents = [];
-            Parallel.For(0, entityIds.Length, filterBody);
-            return ents.GetEnumerator();
-
-            void filterBody(int i, ParallelLoopState state)
-            {
-                EntityId ent = entityIds[i];
-                if (ent.compIds == 0) return;
-                if (filter.Apply(ent))
-                    ents.Add(ent);
-            }
-        }
 
         public void Clear()
         {
@@ -520,6 +562,15 @@ namespace Secsy
         public SecsyException(EntityId ent) : base(ent.ToString()) { }
         public SecsyException(EntityId ent, IComponentId component) : base($"{ent} => {component}") { }
         public SecsyException(string message, Exception inner) : base(message, inner) { }
+    }
+
+    public class DuplicateComponentException : SecsyException
+    {
+        public DuplicateComponentException()
+        {
+        }
+
+        public DuplicateComponentException(IComponentId component) : base($"{component.GetType().FullName}") { }
     }
 
     public class UnregisteredComponentException : SecsyException

@@ -76,6 +76,13 @@ namespace Secsy.Testing
             strComp.SetValue(ent, "Goodbye!").Get(ent).ShouldBe("Goodbye!");
         }
 
+        [TestMethod]
+        public void ComponentAdd()
+        {
+            ref var ent = ref secsy.NewEntity(Components.TestComp1, Components.TestComp2);
+            secsy.AddComponent(ent.ID, Components.TestComp2);
+        }
+
 
         [TestMethod]
         public void IterateFilter()
