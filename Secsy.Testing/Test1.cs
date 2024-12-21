@@ -2,7 +2,7 @@
 using System.Security.Cryptography;
 using Shouldly;
 
-namespace Secsy.Testing
+namespace ECS.Testing
 {
     [TestClass]
     public class Test1
@@ -50,6 +50,10 @@ namespace Secsy.Testing
             ent.IsAlive.ShouldBeTrue();
             ent.Remove();
             ent.IsAlive.ShouldBeFalse();
+
+            Generate(100);
+
+            secsy.NewEntity(Components.TestComp1Copy);
         }
 
         [TestMethod]
@@ -80,7 +84,8 @@ namespace Secsy.Testing
         public void ComponentAdd()
         {
             ref var ent = ref secsy.NewEntity(Components.TestComp1, Components.TestComp2);
-            secsy.AddComponent(ent.ID, Components.TestComp2);
+            var id = ent.ID;
+            Assert.ThrowsException<DuplicateComponentException>(() => secsy.AddComponent(id, Components.TestComp2));
         }
 
 

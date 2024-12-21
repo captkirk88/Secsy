@@ -3,7 +3,8 @@ using BenchmarkDotNet.Exporters;
 using BenchmarkDotNet.Loggers;
 using BenchmarkDotNet.Reports;
 using BenchmarkDotNet.Running;
-using Secsy.Testing;
+using ECS;
+using ECS.Testing;
 
 internal class Program
 {

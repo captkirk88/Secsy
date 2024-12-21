@@ -5,9 +5,9 @@ using System.Text;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using Microsoft.CodeAnalysis.Diagnostics;
-using Secsy.Benchmark;
+using ECS.Benchmark;
 
-namespace Secsy.Testing
+namespace ECS.Testing
 {
     [MemoryDiagnoser]
     public class Benchmarks

@@ -4,6 +4,28 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Title>Secsy ECS</Title>
+    <Authors>captkirk88</Authors>
+    <Description>A very fast entity component system framework.</Description>
+    <PackageProjectUrl>https://github.com/captkirk88/Secsy</PackageProjectUrl>
+    <PackageReadmeFile></PackageReadmeFile>
+    <RepositoryUrl></RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>ecs;entity;component;system;entity-component-system;unity;godot;monogame;fna;stride</PackageTags>
+    <PackageOutputPath>$(OutputPath)\nuget</PackageOutputPath>
+    <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+    <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <Version>1.0.$([System.DateTime]::UtcNow.ToString(yy)).$([System.DateTime]::UtcNow.ToString(dd))</Version>
+    <PackageVersion>$(Version)</PackageVersion>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE.txt">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
 
 </Project>

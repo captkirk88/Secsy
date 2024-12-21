@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 
-namespace Secsy
+namespace ECS
 {
     public delegate void EachEntity(ref EntityId entId);
     public delegate void EachComponent<T>(ComponentId<T> compId);
@@ -420,7 +420,7 @@ namespace Secsy
         }
 
         /// <summary>
-        /// Sets the component value of type <typeparamref name="T"/> for <paramref name="ent"/>
+        /// Adds the component of type <typeparamref name="T"/> for <paramref name="ent"/>
         /// </summary>
         /// <param name="ent"></param>
         /// <returns>This for chaining</returns>
