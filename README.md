@@ -19,6 +19,14 @@ After reviewing a lot of ECS libraries out there.  To name a few..
 So ugly it hurts my programming attraction..
 - [Entitas](https://github.com/sschmid/Entitas)
 
+They all seemed less sexy.
+
+### Why?
+I branched out to other programming languages to see how they do it.  Rust, Java, Google Go.  One in Google Go intrigued me.
+
+- [donburi](https://github.com/yohamta/donburi) by @yohamta
+
+Donburi's approach to Component types was purposeful for the way Google Go is.  But, I thought, wouldn't this work in C# too?  Well, it does.  Not in the same exact way.  Still sexy.
 
 ## First Steps -> Components
 Components must be defined in a static class wrapping them for easy access. A ComponentId type wraps the component type into a struct that allows you to access the Entity component data from anywhere in your code.
