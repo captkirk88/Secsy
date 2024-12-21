@@ -1,0 +1,33 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.12.35527.113
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Secsy", "Secsy\Secsy.csproj", "{B9C8202C-9621-41FE-A0BF-F614F421F414}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Secsy.Testing", "Secsy.Testing\Secsy.Testing.csproj", "{248F11DB-98C1-43DC-9397-E8232813B96D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Secsy.Benchmark", "Secsy.Benchmark\Secsy.Benchmark.csproj", "{EA39640A-C461-4580-8F7C-78E8701E3813}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B9C8202C-9621-41FE-A0BF-F614F421F414}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B9C8202C-9621-41FE-A0BF-F614F421F414}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B9C8202C-9621-41FE-A0BF-F614F421F414}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B9C8202C-9621-41FE-A0BF-F614F421F414}.Release|Any CPU.Build.0 = Release|Any CPU
+		{248F11DB-98C1-43DC-9397-E8232813B96D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{248F11DB-98C1-43DC-9397-E8232813B96D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{248F11DB-98C1-43DC-9397-E8232813B96D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{248F11DB-98C1-43DC-9397-E8232813B96D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EA39640A-C461-4580-8F7C-78E8701E3813}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EA39640A-C461-4580-8F7C-78E8701E3813}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EA39640A-C461-4580-8F7C-78E8701E3813}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EA39640A-C461-4580-8F7C-78E8701E3813}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
