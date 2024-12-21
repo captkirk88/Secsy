@@ -1,5 +1,7 @@
 ﻿# Secsy
 
+[![NuGet version (Secsy)](https://img.shields.io/nuget/v/SoftCircuits.Silk.svg?style=flat-square)](https://www.nuget.org/packages/Secsy/)
+
 It's so sexy that you'll never see sexy the same again.  Oh and all done in a single file called Secsy.cs.. so sexy.
 
 See BenchmarkDotNet results at the bottom.
@@ -9,6 +11,7 @@ See BenchmarkDotNet results at the bottom.
 
 > [!NOTE]
 > Feedback and correcting me is sexy too.
+
 
 After reviewing a lot of ECS libraries out there.  To name a few..
 - [Arch](https://github.com/genaray/Arch)
