@@ -14,6 +14,11 @@ namespace ECS.Testing
     {
         Secsy secsy = new();
 
+        [GlobalSetup]
+        public void Init()
+        {
+            secsy.NewEntities(100_000, Components.TestComp1, Components.TestComp2, Components.TestComp3);
+        }
 
         [BenchmarkDotNet.Attributes.IterationSetup]
         public void PerSetup()
@@ -21,17 +26,6 @@ namespace ECS.Testing
 
         }
 
-        [BenchmarkDotNet.Attributes.IterationCleanup]
-        public void PerCleanup()
-        {
-            secsy.Clear();
-        }
-
-        [BenchmarkDotNet.Attributes.GlobalCleanup]
-        public void Cleanup()
-        {
-            secsy.Clear();
-        }
 
         [Benchmark]
         public void NewComponentId()
@@ -62,21 +56,20 @@ namespace ECS.Testing
         [Benchmark]
         public void SystemWithOneComponent()
         {
-            secsy.Each(new Filter().With(Components.TestComp1, Components.TestComp2), eachEnt);
-
-            void eachEnt(ref EntityId ent)
+            var e = secsy.Filter(new Filter().With(Components.TestComp1, Components.TestComp2));
+            while (e.MoveNext())
             {
-
+                ref var ent = ref secsy.Get(e.Current);
             }
         }
 
         [Benchmark]
         public void SystemWithTwoComponents()
         {
-            secsy.Each(new Filter().With(Components.TestComp1, Components.TestComp2), eachEnt);
-
-            void eachEnt(ref EntityId ent)
+            var e = secsy.Filter(new Filter().With(Components.TestComp1, Components.TestComp2));
+            while (e.MoveNext())
             {
+                ref var ent = ref secsy.Get(e.Current);
                 var comp1 = Components.TestComp1.Get(ent);
                 comp1.Value = 2;
                 Components.TestComp1.SetValue(ent, comp1);
@@ -86,10 +79,10 @@ namespace ECS.Testing
         [Benchmark]
         public void SystemWithThreeComponents()
         {
-            secsy.Each(new Filter().With(Components.TestComp1, Components.TestComp2, Components.TestComp3), eachEnt);
-
-            void eachEnt(ref EntityId ent)
+            var e = secsy.Filter(new Filter().With(Components.TestComp1, Components.TestComp2, Components.TestComp3));
+            while (e.MoveNext())
             {
+                ref var ent = ref secsy.Get(e.Current);
                 var comp1 = Components.TestComp1.Get(ent);
                 comp1.Value = 2;
                 Components.TestComp1.SetValue(ent, comp1);

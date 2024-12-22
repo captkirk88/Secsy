@@ -24,12 +24,16 @@ So ugly it hurts my programming attraction..
 
 They all seemed less sexy.
 
+#
+
 ### Why?
 I branched out to other programming languages to see how they do it.  Rust, Java, Google Go.  One in Google Go intrigued me.
 
 - [donburi](https://github.com/yohamta/donburi) by @yohamta
 
 Donburi's approach to Component types was purposeful for the way Google Go is.  But, I thought, wouldn't this work in C# too?  Well, it does.  Not in the same exact way.  Still sexy.
+
+#
 
 ## First Steps -> Components
 Components must be defined in a static class wrapping them for easy access. A ComponentId type wraps the component type into a struct that allows you to access the Entity component data from anywhere in your code.
@@ -46,12 +50,12 @@ public static class C // I would keep the static class name short so you can typ
 The ComponentId type, the most important type, has multiple methods which can be called anywhere in your code.
 ```csharp
 T? Get(EntityId ent)
-ComponentId<T> Set(ref EntityId ent)
+ComponentId<T> Add(ref EntityId ent)
 ComponentId<T> SetValue(EntityId ent, T newValue)
 bool Has(ref EntityId ent)
 ComponentId<T> Remove(ref EntityId ent)
 ```
-
+#
 
 ## Initialize the Sexy
 Secsy class (or think of it as "World" which other ECS frameworks which never made sense to me, is it a World/Planet/another dimension? Someone made sense calling it a EntityStore.  Good job.)
@@ -76,8 +80,9 @@ ref EntityId Get(long id)
 
 // standard component operations
 void AddComponent<T>(long entId, ComponentId<T> compId)
-void SetComponentValue<T>(long entId, ComponentId<T> compId, T newValue)
+void SetComponentValue(long entId, IComponentId compId, object newValue)
 T? GetComponentValue<T>(long entId, ComponentId<T> compId)
+object? GetComponentValue(long entId, IComponentId compId)
 bool RemoveComponent<T>(long entId, ComponentId<T> compId)
 
 // note: if your component uses a default value, it's ignored.  TODO!
@@ -97,7 +102,7 @@ IEnumerator<long> Filter(Filter filter)
 void Clear() 
 ```
 
-
+#
 
 ### Example
 ```csharp
@@ -123,16 +128,19 @@ void eachEnt(ref EntityId ent){
 }
 ```
 
+#
+#
 
-
-## BENCHMARK!
-| Method                                 | Mean [μs] | Error [μs] | StdDev [μs] | Allocated [KB] |
-|--------------------------------------- |----------:|-----------:|------------:|---------------:|
-| NewComponentId                         |  3.871 μs |  0.5966 μs |   1.7403 μs |        1.38 KB |
-| CreateEntityWithOneComponent           |  2.304 μs |  0.2177 μs |   0.6175 μs |        0.57 KB |
-| CreateEntityWithTwoComponent           |  2.881 μs |  0.2456 μs |   0.6887 μs |        0.63 KB |
-| CreateEntityWithThreeComponent         |  2.784 μs |  0.2320 μs |   0.6428 μs |        0.68 KB |
-| SystemWithOneComponent                 |  8.616 μs |  1.0690 μs |   3.1519 μs |        0.92 KB |
-| SystemWithTwoComponents                |  4.669 μs |  0.4839 μs |   1.3166 μs |        0.92 KB |
-| SystemWithThreeComponents              |  4.354 μs |  0.5213 μs |   1.4704 μs |        0.95 KB |
-| SystemTwoComponentsMultipleComposition |  9.227 μs |  1.0958 μs |   3.1965 μs |        0.92 KB |
+## BENCHMARK! 100,000 Entities
+| Method     | Mean [μs]   | Error [μs] | StdDev [μs]  | Median [μs] | Allocated [KB] |
+| -------------------------------------- | -----------:| ----------:| ------------:| -----------:| --------------:|
+| NewComponentId                         | 13.22 μs    | 0.660 μs   | 1.863 μs     | 13.15 μs    | 0.7 KB         |
+| CreateEntityWithOneComponent           | 15.01 μs    | 0.916 μs   | 2.508 μs     | 14.30 μs    | 0.85 KB        |
+| CreateEntityWithTwoComponent           | 15.38 μs    | 0.718 μs   | 2.015 μs     | 15.00 μs    | 0.91 KB        |
+| CreateEntityWithThreeComponent         | 15.53 μs    | 0.703 μs   | 1.923 μs     | 15.05 μs    | 0.96 KB        |
+| SystemWithOneComponent                 | 2,337.17 μs | 143.222 μs | 379.806 μs   | 2,446.20 μs | 3473.98 KB     |
+| SystemWithTwoComponents                | 9,173.90 μs | 328.073 μs | 936.012 μs   | 8,866.45 μs | 5305.96 KB     |
+| SystemWithThreeComponents              | 9,399.42 μs | 394.294 μs | 1,143.920 μs | 9,138.35 μs | 5946.06 KB     |
+| SystemTwoComponentsMultipleComposition | 727.30 μs   | 40.669 μs  | 116.030 μs   | 712.70 μs   | 4.25 KB        |
+> [!NOTE]
+> 1000μs = 0.001ms

@@ -1,6 +1,7 @@
 ﻿using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.IO.MemoryMappedFiles;
 using System.Runtime.CompilerServices;
 using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
@@ -11,7 +12,7 @@ namespace ECS
     public delegate void EachComponent<T>(ComponentId<T> compId);
 
     /// <summary>
-    /// Sexxy entity component system in one file.  High performance.  So sexy..
+    /// Very fast entity component system.  So secsy..
     /// <para>Max entities = Array.<seealso cref="Array.MaxLength"/></para>
     /// </summary>
     public class Secsy
@@ -32,6 +33,10 @@ namespace ECS
             componentIds = [];
             nextCompId = 0;
         }
+
+        /// <summary>
+        /// Very secsy
+        /// </summary>
         public Secsy()
         {
             entComponents = [];
@@ -39,24 +44,51 @@ namespace ECS
             entsInactive = new();
         }
 
+        /// <summary>
+        /// Total length of internal array
+        /// </summary>
+        public int Capacity
+        {
+            get
+            {
+                lock (_lock) return entityIds.Length;
+            }
+        }
+
+        /// <summary>
+        /// Amount of alive entities
+        /// </summary>
         public int Count
         {
             get
             {
                 int count = 0;
-                for (int i = 0, x = entityIds.Length; i < x; i++)
+                lock (_lock)
                 {
-                    if (entityIds[i].IsAlive) count++;
+                    for (int i = 0, x = entityIds.Length; i < x; i++)
+                    {
+                        if (entityIds[i].IsAlive) count++;
+                    }
                 }
                 return count;
             }
         }
 
-        public ReadOnlySpan<EntityId> All()
+        /// <summary>
+        /// Gets all alive entities
+        /// </summary>
+        /// <returns></returns>
+        public List<EntityId> All()
         {
             lock (_lock)
             {
-                return new(entityIds);
+                List<EntityId> result = new(entityIds.Length);
+                for (int i = 0, x = entityIds.Length; i < x; i++)
+                {
+                    var ent = entityIds[i];
+                    if (ent.IsAlive) result.Add(ent);
+                }
+                return result;
             }
         }
         /// <summary>
@@ -112,28 +144,43 @@ namespace ECS
             return ref entId;
         }
 
+
         /// <summary>
         /// Create many entities
         /// </summary>
-        /// <param name="amount"></param>
+        /// <param name="amount">Amount of entities to create</param>
         /// <param name="comps"></param>
         /// <returns></returns>
         public EntityId[] NewEntities(int amount, params IComponentId[] comps)
         {
             if (amount < 0) return [];
-            int first = 0;
+            IncreaseCapacity(amount);
             ConcurrentBag<EntityId> result = [];
             Parallel.For(0, amount, c =>
             {
-                var entId = NewEntity(comps);
+                ref var entId = ref NewEntity(comps);
                 result.Add(entId);
             });
             return [.. result];
         }
 
+        internal void IncreaseCapacity(int capSize)
+        {
+            lock (_lock)
+            {
+                var len = entityIds.Length;
+                var diff = ((len + capSize) - len);
+                if (diff > 0)
+                {
+                    var newSize = len + diff;
+                    Array.Resize(ref entityIds, newSize);
+                    Array.Resize(ref entComponents, newSize);
+                }
+            }
+        }
+
         internal ref EntityId NewEnt()
         {
-            int bufferSize = 100;
             EntityId entId;
             int nextEntId = 0;
             if (entsInactive.IsEmpty == false)
@@ -145,21 +192,20 @@ namespace ECS
                 lock (_lock)
                 {
                     nextFreeEntId++;
+                    nextEntId = nextFreeEntId;
                 }
-                nextEntId = nextFreeEntId;
             }
 
             entId = new(nextEntId, this);
             lock (_lock)
             {
                 if (nextEntId >= entityIds.Length)
-                    Array.Resize(ref entityIds, entityIds.Length + bufferSize);
+                {
+                    IncreaseCapacity(nextEntId + 100);
+                }
+
                 entityIds[nextEntId] = entId;
 
-                if (nextEntId >= entComponents.Length)
-                {
-                    Array.Resize(ref entComponents, entComponents.Length + bufferSize);
-                }
                 if (entComponents[nextEntId] == null || entComponents[nextEntId].Length == 0)
                     entComponents[nextEntId] = new object?[componentIds.Length];
                 else Array.Clear(entComponents[nextEntId]);
@@ -198,15 +244,14 @@ namespace ECS
         {
             if (entId == 0) return;
             ref var ent = ref Get(entId);
-            if ((ent.compIds & compId.id) == compId.id) throw new DuplicateComponentException(compId);
+            if ((ent.compIds & compId.id) != 0) throw new DuplicateComponentException(compId);
 
             lock (_lock)
             {
                 int len = entComponents[entId].Length;
                 if (len < compId.id) Array.Resize(ref entComponents[entId], len + compId.id);
 
-                Span<object?> comps = new(entComponents[entId]);
-                comps[compId.id] = compId.DefaultValue;
+                entComponents[entId][compId.id] = compId.DefaultValue;
                 ent.compIds |= compId.id;
             }
         }
@@ -214,12 +259,11 @@ namespace ECS
         /// <summary>
         /// Sets component value
         /// </summary>
-        /// <typeparam name="T"></typeparam>
         /// <param name="entId"></param>
-        /// <param name="compId"></param>
+        /// <param name="comp"></param>
         /// <param name="newValue"></param>
         /// <exception cref="InvalidEntityIdException"></exception>
-        public void SetComponentValue<T>(long entId, ComponentId<T> compId, T newValue)
+        public void SetComponentValue(long entId, IComponentId comp, object newValue)
         {
             EntityId ent;
             try
@@ -230,11 +274,16 @@ namespace ECS
             {
                 throw new InvalidEntityIdException(entId);
             }
-            if ((ent.compIds & compId.id) == compId.id)
+
+            lock (_lock)
             {
-                lock (_lock)
+                try
                 {
-                    entComponents[entId][compId.id] = newValue;
+                    entComponents[entId][comp.Id] = newValue;
+                }
+                catch (Exception)
+                {
+                    throw new ComponentNotFoundException(ent, comp);
                 }
             }
         }
@@ -259,20 +308,52 @@ namespace ECS
             {
                 throw new InvalidEntityIdException(entId);
             }
-            if ((ent.compIds & compId.id) == compId.id)
+            try
+            {
                 return (T?)entComponents[entId][compId.id];
+            }
+            catch (Exception)
+            {
+                throw new ComponentNotFoundException(ent, compId);
+            }
             return default;
         }
 
         /// <summary>
-        /// Remove component from <paramref name="entId"/>
+        /// Get the component value from <paramref name="entId"/>
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="entId"></param>
-        /// <param name="compId"></param>
+        /// <param name="comp"></param>
         /// <returns></returns>
         /// <exception cref="InvalidEntityIdException"></exception>
-        public bool RemoveComponent<T>(long entId, ComponentId<T> compId)
+        public object? GetComponentValue(long entId, IComponentId comp)
+        {
+            if (entId == 0) return default;
+            EntityId ent;
+            try
+            {
+                ent = entityIds[entId];
+            }
+            catch (Exception)
+            {
+                throw new InvalidEntityIdException(entId);
+            }
+            var compId = comp.Id;
+            if ((ent.compIds & compId) != 0)
+                return entComponents[entId][compId];
+            return default;
+        }
+
+
+        /// <summary>
+        /// Remove component from <paramref name="entId"/>
+        /// </summary>
+        /// <param name="entId"></param>
+        /// <param name="comp"></param>
+        /// <returns></returns>
+        /// <exception cref="InvalidEntityIdException"></exception>
+        public bool RemoveComponent(long entId, IComponentId comp)
         {
             if (entId == 0) return true;
             EntityId ent;
@@ -284,12 +365,14 @@ namespace ECS
             {
                 throw new InvalidEntityIdException(entId);
             }
-            if ((ent.compIds & compId.id) == compId.id)
+
+            var compId = comp.Id;
+            if ((ent.compIds & compId) != 0)
             {
                 lock (_lock)
                 {
-                    entComponents[entId][compId.id] = null;
-                    entityIds[entId].compIds &= ~compId.id;
+                    entComponents[entId][compId] = null;
+                    entityIds[entId].compIds &= ~compId;
                 }
                 return true;
             }
@@ -305,6 +388,7 @@ namespace ECS
         public IComponentId[] GetComponents(long entId)
         {
             if (entId == 0) return [];
+            var entComps = entComponents;
             EntityId ent;
             try
             {
@@ -314,15 +398,18 @@ namespace ECS
             {
                 throw new InvalidEntityIdException(entId);
             }
+
             if (ent.compIds > 0)
             {
                 List<IComponentId> comps = [];
-                lock (_lock)
+                for (int i = 0, x = componentIds.Length; i < x; i++)
                 {
-                    for (int i = 0, x = componentIds.Length; i < x; i++)
+                    var comp = componentIds[i];
+                    if (comp != null && (ent.compIds & comp.Id) != 0)
                     {
-                        var compVal = entComponents[componentIds[i].Id];
-                        if (compVal != default) comps.Add(componentIds[i]);
+                        var compVal = entComps[ent.id][comp.Id];
+
+                        if (compVal != null) comps.Add(componentIds[i]);
                     }
                 }
                 return [.. comps];
@@ -336,35 +423,60 @@ namespace ECS
         /// <param name="entId"></param>
         public void Remove(int entId)
         {
-            if (entId <= 0) return; // default(EntityId) is automatically considered inactive.
+            EntityId ent;
+            try
+            {
+                ent = entityIds[entId];
+            }
+            catch (Exception)
+            {
+                throw new InvalidEntityIdException(entId);
+            }
+
             lock (_lock)
             {
-                ref var ent = ref entityIds[entId];
                 ent.compIds = 0;
-                // Just in case called on default(EntityId)
+                Array.Clear(entComponents[ent.id]);
             }
             entsInactive.Enqueue(entId);
         }
 
-        public void Each(Filter filter, EachEntity fn)
+        /// <summary>
+        /// Iterates through each entity that was <paramref name="filter"/>ed
+        /// </summary>
+        /// <param name="filter"></param>
+        /// <param name="fn"></param>
+        /// <returns>Amount of entities that were processed</returns>
+        public int Each(IFilter filter, EachEntity fn)
         {
-            var result = Filter(filter);
-            while (result.MoveNext())
+            if (filter == null) return 0;
+            var e = Filter(filter);
+            int count = 0;
+
+            while (e.MoveNext())
             {
-                fn(ref entityIds[result.Current]);
+                fn(ref entityIds[e.Current]);
+                count++;
             }
+            return count;
         }
 
-        public IEnumerator<long> Filter(Filter filter)
+        /// <summary>
+        /// Filters entities with <paramref name="filter"/>
+        /// </summary>
+        /// <param name="filter"></param>
+        /// <returns></returns>
+        public IEnumerator<long> Filter(IFilter filter)
         {
             if (filter == null) return Enumerable.Empty<long>().GetEnumerator();
             ConcurrentBag<long> ents = [];
-            Parallel.For(0, entityIds.Length, filterBody);
+            Parallel.ForEach(entityIds, filterBody);
+            //Parallel.For(0, entityIds.Length, filterBody);
             return ents.GetEnumerator();
-            void filterBody(int i, ParallelLoopState state)
+            void filterBody(EntityId ent)
             {
-                EntityId ent = entityIds[i];
-                if (ent.compIds == 0) return;
+                //ref EntityId ent = ref entityIds[i];
+                if (ent.compIds == 0 || ent.id == 0) return;
                 if (filter.Apply(ent))
                     ents.Add(ent.id);
             }
@@ -381,8 +493,14 @@ namespace ECS
 
     public interface IComponentId
     {
+        /// <summary>
+        /// Component's unique id
+        /// </summary>
         int Id { get; }
 
+        /// <summary>
+        /// Default value to set
+        /// </summary>
         object? DefaultValue { get; }
 
         string ToString()
@@ -401,12 +519,18 @@ namespace ECS
         }
         internal readonly int id;
 
+        /// <summary>
+        /// <inheritdoc/>
+        /// </summary>
         public readonly int Id => id;
 
         object? IComponentId.DefaultValue => value;
 
         internal readonly T? value;
 
+        /// <summary>
+        /// <inheritdoc cref="IComponentId.DefaultValue"/>
+        /// </summary>
         public T? DefaultValue => value;
 
         /// <summary>
@@ -424,7 +548,7 @@ namespace ECS
         /// </summary>
         /// <param name="ent"></param>
         /// <returns>This for chaining</returns>
-        public ComponentId<T> Set(ref EntityId ent)
+        public ComponentId<T> Add(ref EntityId ent)
         {
             ent.man.AddComponent(ent.id, this);
             ent.compIds |= id;
@@ -439,8 +563,14 @@ namespace ECS
         /// <returns></returns>
         public ComponentId<T> SetValue(EntityId ent, T newValue)
         {
-            if ((ent.compIds & id) == id)
+            try
+            {
                 ent.man.entComponents[ent.id][id] = newValue;
+            }
+            catch (Exception)
+            {
+                throw new ComponentNotFoundException(ent, this);
+            }
             return this;
         }
 
@@ -454,6 +584,11 @@ namespace ECS
             return (ent.compIds & id) == id;
         }
 
+        /// <summary>
+        /// Removes the <see cref="ComponentId{T}"/> from <paramref name="ent"/>
+        /// </summary>
+        /// <param name="ent"></param>
+        /// <returns></returns>
         public ComponentId<T> Remove(ref EntityId ent)
         {
             ent.man.RemoveComponent(ent.id, this);
@@ -462,8 +597,9 @@ namespace ECS
         }
     }
 
-    // TODO evaluate using ref struct
-
+    /// <summary>
+    /// Entity
+    /// </summary>
     public struct EntityId
     {
         internal static EntityId Null = default;
@@ -476,34 +612,59 @@ namespace ECS
         internal Secsy man;
         internal int id;
 
+        /// <summary>
+        /// Returns entity id
+        /// </summary>
         public readonly int ID => id;
 
         internal int compIds;
 
+        /// <summary>
+        /// Returns if this entity is alive with components assigned to it
+        /// </summary>
         public readonly bool IsAlive => compIds != 0;
 
+        /// <summary>
+        /// Checks if this entity has <paramref name="componentId"/>
+        /// </summary>
+        /// <param name="componentId"></param>
+        /// <returns></returns>
         public readonly bool Has(IComponentId componentId)
         {
             return componentId != null && (compIds & componentId.Id) == componentId.Id;
         }
 
+        /// <summary>
+        /// Gets all the components for this entity
+        /// </summary>
+        /// <returns></returns>
         public readonly IComponentId[] GetComponents()
         {
             return man.GetComponents(id);
         }
 
+        /// <summary>
+        /// Removes this entity
+        /// </summary>
         public void Remove()
         {
             man.Remove(this.id);
             compIds = 0;
         }
 
+        /// <summary>
+        /// Returns a string
+        /// </summary>
+        /// <returns></returns>
         public override string ToString()
         {
             return $"Entity[{id}]";
         }
     }
 
+    /// <summary>
+    /// Filter
+    /// </summary>
     public interface IFilter
     {
         /// <summary>
@@ -514,20 +675,37 @@ namespace ECS
         bool Apply(EntityId entity);
     }
 
+    /// <summary>
+    /// Common usage filter
+    /// </summary>
     public class Filter : IFilter
     {
         internal int incIds, excIds;
 
+
+        /// <summary>
+        /// Filter entities that <b>DO</b> have components specified in <paramref name="compIds"/>.
+        /// </summary>
+        /// <param name="compIds"></param>
+        /// <returns></returns>
         public Filter With(params IComponentId[] compIds)
         {
             for (int i = 0, x = compIds.Length; i < x; i++)
             {
                 if (compIds[i] != null)
+                {
                     incIds |= compIds[i].Id;
+                    excIds &= ~compIds[i].Id; // remove the component id from the excluded if it is in there
+                }
             }
             return this;
         }
 
+        /// <summary>
+        /// Filter entities that <b>DO NOT</b> have components specified in <paramref name="compIds"/>.
+        /// </summary>
+        /// <param name="compIds"></param>
+        /// <returns></returns>
         public Filter Without(params IComponentId[] compIds)
         {
             for (int i = 0, x = compIds.Length; i < x; i++)
@@ -542,12 +720,37 @@ namespace ECS
             return this;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        /// <summary>
+        /// Resets the filter making it filter nothing.
+        /// </summary>
+        /// <returns></returns>
+        public Filter Reset()
+        {
+            incIds = 0;
+            excIds = 0;
+            return this;
+        }
+
+        /// <summary>
+        /// <inheritdoc/>
+        /// </summary>
         public bool Apply(EntityId entity)
         {
-            bool incPass = incIds > 0 && (entity.compIds & incIds) == incIds;
+            bool incPass = incIds > 0 && (entity.compIds & incIds) != 0;
             bool excPass = excIds > 0 && (entity.compIds & excIds) != 0;
             return incPass == true && excPass == false;
+        }
+
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
+        public bool ApplyMany(params EntityId[] ents)
+#pragma warning restore CS1591 // Missing XML comment for publicly visible type or member
+        {
+            bool result = true;
+            for (int i = 0, x = ents.Length; i < x; i++)
+            {
+                result &= Apply(ents[i]);
+            }
+            return result;
         }
     }
 
@@ -555,6 +758,7 @@ namespace ECS
 
 
     [Serializable]
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
     public class SecsyException : Exception
     {
         public SecsyException() { }
@@ -582,6 +786,15 @@ namespace ECS
         public UnregisteredComponentException(IComponentId component) : base($"{component.GetType().FullName}") { }
     }
 
+    public class ComponentNotFoundException : SecsyException
+    {
+        public ComponentNotFoundException()
+        {
+        }
+
+        public ComponentNotFoundException(EntityId ent, IComponentId component) : base(ent, component) { }
+    }
+
     public class InvalidEntityIdException : SecsyException
     {
         public InvalidEntityIdException() { }
@@ -590,4 +803,6 @@ namespace ECS
         {
         }
     }
+
+#pragma warning restore CS1591 // Missing XML comment for publicly visible type or member
 }

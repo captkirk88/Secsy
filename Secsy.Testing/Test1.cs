@@ -1,6 +1,9 @@
 ﻿using System.Diagnostics;
 using System.Security.Cryptography;
 using Shouldly;
+using System.Linq;
+using System.Diagnostics.Metrics;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ECS.Testing
 {
@@ -12,13 +15,13 @@ namespace ECS.Testing
         [ClassInitialize]
         public static void ClassInit(TestContext context)
         {
-            // This method is called once for the test class, before any tests of the class are run.
+
         }
 
         [ClassCleanup]
         public static void ClassCleanup()
         {
-            // This method is called once for the test class, after all tests of the class are run.
+
         }
 
         [TestCleanup]
@@ -50,16 +53,27 @@ namespace ECS.Testing
             ent.IsAlive.ShouldBeTrue();
             ent.Remove();
             ent.IsAlive.ShouldBeFalse();
-
-            Generate(100);
+            //GenerateDefault(100);
 
             secsy.NewEntity(Components.TestComp1Copy);
         }
 
         [TestMethod]
-        public void NewEntityMany()
+        public void NewEntity100_000()
         {
-            Generate(100_000);
+            secsy.Clear();
+            var ents = GenerateDefault(100_000);
+            ents.Length.ShouldBe(100_000);
+
+            Console.WriteLine($"{secsy.Count}/{secsy.Capacity}");
+        }
+
+        [TestMethod]
+        public void NewEntity500_000()
+        {
+            secsy.Clear();
+            var ents = GenerateDefault(500_000);
+            ents.Length.ShouldBe(500_000);
         }
 
         [TestMethod]
@@ -78,6 +92,9 @@ namespace ECS.Testing
             Components.TestComp2.SetValue(ent, new TestComp2 { Value = 3 }).Get(ent).Value.ShouldBe(3);
             strComp.SetValue(ent, "Hello World!!!!").Get(ent).ShouldBe("Hello World!!!!");
             strComp.SetValue(ent, "Goodbye!").Get(ent).ShouldBe("Goodbye!");
+
+            var comps = secsy.GetComponents(ent.ID);
+            secsy.GetComponentValue(ent.ID, comps[0]).ShouldNotBeNull();
         }
 
         [TestMethod]
@@ -92,11 +109,14 @@ namespace ECS.Testing
         [TestMethod]
         public void IterateFilter()
         {
-            int amount = 500;
-            Generate(amount);
+            int amount = 5000;
+            var ents = GenerateDefault(amount);
+            ents.Length.ShouldBe(amount);
             var enumerator = secsy.Filter(new Filter().With(Components.TestComp1));
+            Stopwatch timeout = Stopwatch.StartNew();
             while (enumerator.MoveNext())
             {
+                if (timeout.Elapsed > TimeSpan.FromSeconds(50)) break;
                 ref var ent = ref secsy.Get(enumerator.Current);
                 Components.TestComp1.Remove(ref ent).Has(ref ent).ShouldBeFalse();
             }
@@ -117,34 +137,58 @@ namespace ECS.Testing
         public void FiltersMany()
         {
             secsy.Clear();
+            secsy.Count.ShouldBe(0);
             int amount = 10000;
-            var ents = Generate(amount);
-            ents.Length.ShouldBe(amount);
-            var includeResult = secsy.Filter(new Filter().With(Components.TestComp1));
+            var groupA = GenerateDefault(amount);
+            var groupB = Generate(amount, Components.TestComp1, Components.TestComp3);
+            Console.WriteLine($"{secsy.Count}/{secsy.Capacity}");
+            secsy.Count.ShouldBe(amount * 2);
 
-            var excludeResult = secsy.Filter(new Filter().Without(Components.TestComp1, Components.TestComp2));
+            var filterA = new Filter().With(Components.TestComp1, Components.TestComp2).Without(Components.TestComp3);
+            var filterB = new Filter().With(Components.TestComp3);
+            groupA.Where(filterA.Apply).Count().ShouldBe(amount);
+            groupA.Where(filterA.Apply).Count().ShouldBe(amount);
+            groupB.Where(filterA.Apply).Count().ShouldBe(0);
+            groupB.Where(filterB.Apply).Count().ShouldBe(groupB.Length);
 
-            var includeExcludeResult = secsy.Filter(new Filter().With(Components.TestComp1, Components.TestComp2).Without(Components.TestComp3));
-
-            var allResult = secsy.Filter(new Filter().With(Components.TestComp1, Components.TestComp2, Components.TestComp3));
+            var filter = new Filter().With(Components.TestComp1, Components.TestComp2);//.Without(Components.TestComp3);
+            filter.ApplyMany(groupA).ShouldBeTrue();
+            var excFilter = new Filter().Without(Components.TestComp1);
+            excFilter.ApplyMany(groupA).ShouldBeFalse();
+            var bothFilter = new Filter().With(Components.TestComp1).Without(Components.TestComp5);
+            bothFilter.ApplyMany(groupA).ShouldBeFalse();
 
         }
 
         [TestMethod]
         public void EachOp()
         {
+            secsy.Clear();
             int amount = 10000;
-            var ents = Generate(amount);
+            var ents = GenerateDefault(amount);
+            //Generate(amount, Components.TestComp1, Components.TestComp3);
 
-            void eachEnt(ref EntityId ent)
+            var filter = new Filter().With(Components.TestComp1, Components.TestComp2);//.Without(Components.TestComp3);
+            filter.ApplyMany(ents).ShouldBeTrue();
+
+            int simCount = 0;
+            int count = secsy.Each(filter, (ref EntityId ent) =>
             {
+                simCount++;
+            });
 
-            }
+            simCount.ShouldBe(count);
+            Console.WriteLine($"{simCount}");
         }
 
-        private EntityId[] Generate(int amount)
+        private EntityId[] Generate(int amount, params IComponentId[] comps)
         {
-            return secsy.NewEntities(amount, Components.TestComp1, Components.TestComp2, Components.TestComp3);
+            return secsy.NewEntities(amount, comps);
+        }
+
+        private EntityId[] GenerateDefault(int amount)
+        {
+            return secsy.NewEntities(amount, Components.TestComp1, Components.TestComp2);
         }
     }
 
