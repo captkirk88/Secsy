@@ -13,11 +13,11 @@
     <RepositoryUrl></RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>ecs;entity;component;system;entity-component-system;unity;godot;monogame;fna;stride</PackageTags>
-    <PackageOutputPath>$(OutputPath)\nuget</PackageOutputPath>
+    <PackageOutputPath>$(OutputPath)nuget</PackageOutputPath>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
     <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
-    <Version>1.0.$([System.DateTime]::UtcNow.ToString(yy)).$([System.DateTime]::UtcNow.ToString(dd))</Version>
+    <Version>1.$([System.DateTime]::UtcNow.ToString(yy)).$([System.DateTime]::UtcNow.ToString(MMdd)).$([System.DateTime]::UtcNow.ToString(hhmm))</Version>
     <PackageVersion>$(Version)</PackageVersion>
   </PropertyGroup>
 

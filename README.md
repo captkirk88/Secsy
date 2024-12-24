@@ -4,7 +4,7 @@
 
 It's so sexy that you'll never see sexy the same again.  Oh and all done in a single file called Secsy.cs.. so sexy.
 
-See BenchmarkDotNet results at the bottom.
+See BenchmarkDotNet results at the bottom.  It's very sexy.
 
 > [!NOTE]
 > This ECS requires you to do things a little differently, which is why it is so fast.
@@ -26,7 +26,7 @@ They all seemed less sexy.
 
 #
 
-### Why?
+## Why?
 I branched out to other programming languages to see how they do it.  Rust, Java, Google Go.  One in Google Go intrigued me.
 
 - [donburi](https://github.com/yohamta/donburi) by @yohamta
@@ -37,6 +37,8 @@ Donburi's approach to Component types was purposeful for the way Google Go is.  
 
 ## First Steps -> Components
 Components must be defined in a static class wrapping them for easy access. A ComponentId type wraps the component type into a struct that allows you to access the Entity component data from anywhere in your code.
+> [!NOTE]
+> 128 ComponentId max.  I may add more if the performance isn't impacted by the additional flag fields.
 ```csharp
 public static class C // I would keep the static class name short so you can type it out easy
 {
@@ -108,23 +110,32 @@ void Clear()
 ```csharp
 public static class C // I would keep the static class name short so you can type it out easy
 {
-  public static ComponentId<string> MyTag = Secsy.NewComponentId<string>(); // Tags can be whatever type your want, you'll see why.
-  public static ComponentId<float> X = Secsy.NewComponentId<float>(); // 
-  public static ComponentId<float> Y = Secsy.NewComponentId<float>();
+  public static ComponentId<string> MyTag = Secsy.NewComponentId<string>("Helloooooo World!"); // Tags can be whatever type your want, you'll see why.
+  public static ComponentId<float> X = Secsy.NewComponentId<float>(132f); 
+  public static ComponentId<float> Y = Secsy.NewComponentId<float>(); // Default of float is 0.0f
   public static ComponentId<MyDataStruct> Data = Secsy.NewComponentId<MyDataStruct>();
   public static ComponentId<MyDataStruct> MoreData = Secsy.NewComponentId<MyDataStruct>(); // Perfectly valid and sexy
 }
 
 var ent = secsy.NewEntity(C.MyData,C.MoreData,C.MyTag,C.X,C.Y);
-C.X.SetValue(ent, 0.2f);
-C.MyData.SetValue(ent,new MyDataStruct{Value=123});
-long entId = secsy.Get(ent.ID)
-secsy.RemoveComponent(entId,C.MoreData);
 
-secsy.Each(new Filter().With(C.X, eachEnt);
+C.X.SetValue(ent, 0.2f);
+
+C.MyData.SetValue(ent,new MyDataStruct{Value=123});
+
+ref EntityId entId = ref secsy.Get(ent.ID)
+bool isRemovedOrDidnotExist = secsy.RemoveComponent(entId,C.MoreData);
+
+int amountOfEntitiesVisited = secsy.Each(new Filter().With(C.X), eachEnt);
 
 void eachEnt(ref EntityId ent){
   C.X.SetValue(ent,C.X.Get(ent)+0.2f);
+}
+
+// or use Filter method
+IEnumerator<long> enumerator = secsy.Filter(new Filter().With(C.X));
+while (enumerator.MoveNext()){
+	ref var ent = secsy.Get(enumerator.Current);
 }
 ```
 
