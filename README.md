@@ -143,15 +143,21 @@ while (enumerator.MoveNext()){
 #
 
 ## BENCHMARK! 100,000 Entities
-| Method     | Mean [μs]   | Error [μs] | StdDev [μs]  | Median [μs] | Allocated [KB] |
-| -------------------------------------- | -----------:| ----------:| ------------:| -----------:| --------------:|
-| NewComponentId                         | 13.22 μs    | 0.660 μs   | 1.863 μs     | 13.15 μs    | 0.7 KB         |
-| CreateEntityWithOneComponent           | 15.01 μs    | 0.916 μs   | 2.508 μs     | 14.30 μs    | 0.85 KB        |
-| CreateEntityWithTwoComponent           | 15.38 μs    | 0.718 μs   | 2.015 μs     | 15.00 μs    | 0.91 KB        |
-| CreateEntityWithThreeComponent         | 15.53 μs    | 0.703 μs   | 1.923 μs     | 15.05 μs    | 0.96 KB        |
-| SystemWithOneComponent                 | 2,337.17 μs | 143.222 μs | 379.806 μs   | 2,446.20 μs | 3473.98 KB     |
-| SystemWithTwoComponents                | 9,173.90 μs | 328.073 μs | 936.012 μs   | 8,866.45 μs | 5305.96 KB     |
-| SystemWithThreeComponents              | 9,399.42 μs | 394.294 μs | 1,143.920 μs | 9,138.35 μs | 5946.06 KB     |
-| SystemTwoComponentsMultipleComposition | 727.30 μs   | 40.669 μs  | 116.030 μs   | 712.70 μs   | 4.25 KB        |
+| Method                                 | Mean [μs]    | Error [μs] | StdDev [μs] | Median [μs]  | Allocated [KB] |
+| -------------------------------------- | ------------:| ----------:| -----------:| ------------:| --------------:|
+| NewComponentId                         | 11.86 μs     | 0.564 μs   | 1.628 μs    | 11.70 μs     | 0.7 KB         |
+| CreateEntityWithOneComponent           | 11.03 μs     | 0.556 μs   | 1.603 μs    | 10.75 μs     | 1.77 KB        |
+| CreateEntityWithTwoComponent           | 13.56 μs     | 0.640 μs   | 1.857 μs    | 13.30 μs     | 1.83 KB        |
+| CreateEntityWithThreeComponent         | 14.49 μs     | 0.562 μs   | 1.603 μs    | 14.35 μs     | 1.88 KB        |
+| CreateEntityWithFourComponent          | 11.68 μs     | 0.426 μs   | 1.193 μs    | 11.50 μs     | 1.94 KB        |
+| CreateEntityWithFiveComponent          | 12.25 μs     | 0.401 μs   | 1.143 μs    | 12.10 μs     | 1.99 KB        |
+| CreateEntityWithSixComponent           | 15.59 μs     | 0.737 μs   | 2.089 μs    | 14.85 μs     | 2.05 KB        |
+| SystemWithOneComponent                 | 3,239.10 μs  | 276.725 μs | 798.416 μs  | 2,906.80 μs  | 3050.63 KB     |
+| SystemWithTwoComponents                | 16,631.80 μs | 326.005 μs | 570.971 μs  | 16,702.10 μs | 5585.97 KB     |
+| SystemWithThreeComponents              | 17,119.23 μs | 320.698 μs | 792.687 μs  | 16,977.50 μs | 5201.8 KB      |
+| SystemTwoComponentsMultipleComposition | 1,440.19 μs  | 285.039 μs | 822.402 μs  | 945.50 μs    | 27.79 KB       |
+
 > [!NOTE]
 > 1000μs = 0.001ms
+> 
+> Memory increases with more components.  This is expected.  The more components you have, the more memory you will use.  This is a trade off for speed.  If you need to save memory, you can use a different ECS library.  This is for speed.
