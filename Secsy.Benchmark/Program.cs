@@ -12,7 +12,6 @@ internal class Program
     {
         var config = new BenchmarkDotNet.Configs.ManualConfig();
         config.WithOption(ConfigOptions.LogBuildOutput, false);
-        config.WithOption(ConfigOptions.LogBuildOutput, false);
         config.WithOption(ConfigOptions.JoinSummary, true);
         config.AddExporter(MarkdownExporter.GitHub, BenchmarkReportExporter.Default);
         config.AddColumnProvider(BenchmarkDotNet.Columns.DefaultColumnProviders.Instance);
@@ -20,8 +19,8 @@ internal class Program
         SummaryStyle style = new(null, true, Perfolizer.Metrology.SizeUnit.KB, null);
         config.WithSummaryStyle(style);
 
-        var sum = BenchmarkRunner.Run<Benchmarks>(config);
+        BenchmarkRunner.Run<Benchmarks>(config);
+        //BenchmarkRunner.Run<CreateEntitiesBenchmark>(config);
 
-        Console.WriteLine(sum.TotalTime);
     }
 }

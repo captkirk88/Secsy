@@ -5,7 +5,6 @@ using System.Text;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using Microsoft.CodeAnalysis.Diagnostics;
-using ECS.Benchmark;
 
 namespace ECS.Testing
 {
@@ -69,13 +68,6 @@ namespace ECS.Testing
         public void CreateEntityWithSixComponent()
         {
             secsy.NewEntity(Components.TestComp1, Components.TestComp2, Components.TestComp3, Components.TestComp4, Components.TestComp5, Components.TestComp6);
-        }
-
-        [Benchmark]
-        [BenchmarkDotNet.Attributes.MaxWarmupCount(20)]
-        public void CreateOneMillionEntitiesWith6Components()
-        {
-            secsy.NewEntities(1_000_000, Components.TestComp1, Components.TestComp2, Components.TestComp3, Components.TestComp4, Components.TestComp5, Components.TestComp6);
         }
 
         [Benchmark]
