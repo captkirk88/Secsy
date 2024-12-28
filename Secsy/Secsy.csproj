@@ -19,6 +19,7 @@
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
     <Version>1.$([System.DateTime]::UtcNow.ToString(yy)).$([System.DateTime]::UtcNow.ToString(MMdd)).$([System.DateTime]::UtcNow.ToString(hhmm))</Version>
     <PackageVersion>$(Version)</PackageVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>

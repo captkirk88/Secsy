@@ -12,15 +12,15 @@ internal class Program
     {
         var config = new BenchmarkDotNet.Configs.ManualConfig();
         config.WithOption(ConfigOptions.LogBuildOutput, false);
-        config.WithOption(ConfigOptions.JoinSummary, true);
-        config.AddExporter(MarkdownExporter.GitHub, BenchmarkReportExporter.Default);
+        config.WithOption(ConfigOptions.JoinSummary, false);
+        config.AddExporter(MarkdownExporter.GitHub, BenchmarkReportExporter.Default, HtmlExporter.Default);
         config.AddColumnProvider(BenchmarkDotNet.Columns.DefaultColumnProviders.Instance);
         config.AddLogger(ConsoleLogger.Default);
         SummaryStyle style = new(null, true, Perfolizer.Metrology.SizeUnit.KB, null);
         config.WithSummaryStyle(style);
 
-        BenchmarkRunner.Run<Benchmarks>(config);
-        //BenchmarkRunner.Run<CreateEntitiesBenchmark>(config);
+        BenchmarkRunner.Run<CreateEntitiesBenchmark>(config);
+        BenchmarkRunner.Run<SystemsBenchmark>(config);
 
     }
 }

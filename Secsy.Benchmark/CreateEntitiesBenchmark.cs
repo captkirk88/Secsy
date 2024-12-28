@@ -8,18 +8,22 @@ using SecsyECS = ECS.Secsy;
 
 namespace ECS.Testing
 {
+    [BenchmarkCategory("CreateEntities")]
     [MemoryDiagnoser]
+    [MinIterationCount(3)]
+    [MaxIterationCount(7)]
+    [WarmupCount(5)]
     public class CreateEntitiesBenchmark
     {
         SecsyECS secsy = new();
 
-        [Params(10_000, 100_000, 500_000)]
-        public int Size { get; set; }
+        [Params(100_000)]
+        public int EntityCount { get; set; }
 
-        [Benchmark(Baseline = true)]
-        public void Create()
+        [Benchmark]
+        public void CreateEntities()
         {
-            secsy.NewEntities(Size, Components.TestComp1, Components.TestComp2, Components.TestComp3, Components.TestComp4, Components.TestComp5, Components.TestComp6);
+            secsy.NewEntities(EntityCount, Components.TestComp1, Components.TestComp2, Components.TestComp3, Components.TestComp4, Components.TestComp5, Components.TestComp6);
         }
     }
 }

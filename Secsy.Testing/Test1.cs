@@ -33,6 +33,7 @@ namespace ECS.Testing
         [TestCleanup]
         public void TestCleanup()
         {
+            Console.WriteLine($"{secsy.Count}/{secsy.Capacity}");
             secsy.Clear();
         }
 
@@ -70,10 +71,9 @@ namespace ECS.Testing
         {
             var count = 100_000;
             secsy.Clear();
-            var ents = GenerateDefault(count);
-            ents.Length.ShouldBe(count);
+            GenerateDefault(count);
             secsy.Count.ShouldBe(count);
-            Console.WriteLine($"{secsy.Count}/{secsy.Capacity}");
+
         }
 
         [TestMethod]
@@ -81,10 +81,8 @@ namespace ECS.Testing
         {
             var count = 500_000;
             secsy.Clear();
-            var ents = GenerateDefault(count);
-            ents.Length.ShouldBe(count);
+            GenerateDefault(count);
             secsy.Count.ShouldBe(count);
-            Console.WriteLine($"{secsy.Count}/{secsy.Capacity}");
         }
 
         [TestMethod]
@@ -92,10 +90,8 @@ namespace ECS.Testing
         {
             var count = 1_000_000;
             secsy.Clear();
-            var ents = GenerateDefault(count);
-            ents.Length.ShouldBe(count);
+            GenerateDefault(count);
             secsy.Count.ShouldBe(count);
-            Console.WriteLine($"{secsy.Count}/{secsy.Capacity}");
         }
 
         [TestMethod]
@@ -111,7 +107,10 @@ namespace ECS.Testing
         {
             var strComp = Secsy.NewComponentId<string>("");
             ref var ent = ref secsy.NewEntity(Components.TestComp1, Components.TestComp2, strComp);
-            Components.TestComp2.SetValue(ent, new TestComp2 { Value = 3 }).Get(ent).Value.ShouldBe(3);
+            var comp2 = Components.TestComp2.SetValue(ent, new TestComp2 { Value = 3 });
+            var comp2Val = comp2.Get(ent);
+            comp2Val.Value.ShouldBe(3);
+            comp2.SetValue(ent, comp2Val);
             strComp.SetValue(ent, "Hello World!!!!").Get(ent).ShouldBe("Hello World!!!!");
             strComp.SetValue(ent, "Goodbye!").Get(ent).ShouldBe("Goodbye!");
 
@@ -146,9 +145,10 @@ namespace ECS.Testing
         [TestMethod]
         public void IterateFilter()
         {
+            secsy.Clear();
             int amount = 5000;
-            var ents = GenerateDefault(amount);
-            ents.Length.ShouldBe(amount);
+            GenerateDefault(amount);
+            secsy.Count.ShouldBe(amount);
             var enumerator = secsy.Filter(new Filter().With(Components.TestComp1));
             Stopwatch timeout = Stopwatch.StartNew();
             while (enumerator.MoveNext())
@@ -175,8 +175,8 @@ namespace ECS.Testing
         public void EachOp()
         {
             secsy.Clear();
-            int amount = 10000;
-            var ents = GenerateDefault(amount);
+            int amount = 100000;
+            GenerateDefault(amount);
             //Generate(amount, Components.TestComp1, Components.TestComp3);
 
             var filter = new Filter().With(Components.TestComp1, Components.TestComp2);//.Without(Components.TestComp3);
@@ -194,26 +194,27 @@ namespace ECS.Testing
         [TestMethod]
         public void SystemTwoComponentsMultipleComposition()
         {
-            GenerateDefault(500_000);
+            secsy.Clear();
+            GenerateDefault(100_000);
             int amount = secsy.Each(new Filter().With(Components.TestComp1, Components.TestComp2).Without(Components.TestComp3, Components.TestComp4, Components.TestComp5, Components.TestComp6), eachEnt);
             Console.WriteLine($"{amount}");
             void eachEnt(ref EntityId ent)
             {
                 var comp1 = Components.TestComp1.Get(ent);
-                comp1.Value = 2;
+                comp1.Value++;
                 Components.TestComp1.SetValue(ent, comp1);
                 Components.TestComp2.Remove(ref ent);
             }
         }
 
-        private EntityId[] Generate(int amount, params IComponentId[] comps)
+        private void Generate(int amount, params IComponentId[] comps)
         {
-            return secsy.NewEntities(amount, comps);
+            secsy.NewEntities(amount, comps);
         }
 
-        private EntityId[] GenerateDefault(int amount)
+        private void GenerateDefault(int amount)
         {
-            return secsy.NewEntities(amount, Components.TestComp1, Components.TestComp2);
+            secsy.NewEntities(amount, Components.TestComp1, Components.TestComp2);
         }
     }
 
