@@ -38,7 +38,7 @@ Donburi's approach to Component types was purposeful for the way Google Go is.  
 ## First Steps -> Components
 Components must be defined in a static class wrapping them for easy access. A ComponentId type wraps the component type into a struct that allows you to access the Entity component data from anywhere in your code.
 > [!NOTE]
-> 128 ComponentId max.  I may add more if the performance isn't impacted by the additional flag fields.
+> 64 ComponentId max.  I may add more if the performance isn't impacted by the additional flag fields.
 ```csharp
 public static class C // I would keep the static class name short so you can type it out easy
 {
@@ -60,7 +60,7 @@ ComponentId<T> Remove(ref EntityId ent)
 #
 
 ## Initialize the Sexy
-Secsy class (or think of it as "World" which other ECS frameworks which never made sense to me, is it a World/Planet/another dimension? Someone made sense calling it a EntityStore.  Good job.)
+Secsy class (or think of it as "World", other ECS frameworks use that to define a "World".. which never made sense to me, is it a World/Planet/another dimension? Someone made sense calling it a EntityStore.  Good job.)
 ```csharp
 Secsy secsy = new Secsy(); // That is it.
 ```
@@ -142,21 +142,20 @@ while (enumerator.MoveNext()){
 #
 #
 
-## BENCHMARK! 100,000 Entities
-| Method                                 | Mean [μs]    | Error [μs] | StdDev [μs] | Median [μs]  | Allocated [KB] |
-| -------------------------------------- | ------------:| ----------:| -----------:| ------------:| --------------:|
-| NewComponentId                         | 11.86 μs     | 0.564 μs   | 1.628 μs    | 11.70 μs     | 0.7 KB         |
-| CreateEntityWithOneComponent           | 11.03 μs     | 0.556 μs   | 1.603 μs    | 10.75 μs     | 1.77 KB        |
-| CreateEntityWithTwoComponent           | 13.56 μs     | 0.640 μs   | 1.857 μs    | 13.30 μs     | 1.83 KB        |
-| CreateEntityWithThreeComponent         | 14.49 μs     | 0.562 μs   | 1.603 μs    | 14.35 μs     | 1.88 KB        |
-| CreateEntityWithFourComponent          | 11.68 μs     | 0.426 μs   | 1.193 μs    | 11.50 μs     | 1.94 KB        |
-| CreateEntityWithFiveComponent          | 12.25 μs     | 0.401 μs   | 1.143 μs    | 12.10 μs     | 1.99 KB        |
-| CreateEntityWithSixComponent           | 15.59 μs     | 0.737 μs   | 2.089 μs    | 14.85 μs     | 2.05 KB        |
-| SystemWithOneComponent                 | 3,239.10 μs  | 276.725 μs | 798.416 μs  | 2,906.80 μs  | 3050.63 KB     |
-| SystemWithTwoComponents                | 16,631.80 μs | 326.005 μs | 570.971 μs  | 16,702.10 μs | 5585.97 KB     |
-| SystemWithThreeComponents              | 17,119.23 μs | 320.698 μs | 792.687 μs  | 16,977.50 μs | 5201.8 KB      |
-| SystemTwoComponentsMultipleComposition | 1,440.19 μs  | 285.039 μs | 822.402 μs  | 945.50 μs    | 27.79 KB       |
+## BENCHMARK!
+> [!NOTE]
+> Not as fast as I was hoping.
 
+| Method         | EntityCount | Mean [ms] | Error [ms] | StdDev [ms] | Gen0       | Gen1       | Allocated [KB] |
+|--------------- |------------ |----------:|-----------:|------------:|-----------:|-----------:|---------------:|
+| CreateEntities | 100000      |  326.4 ms |   195.0 ms |    69.55 ms | 20000.0000 | 10000.0000 |   163309.06 KB |
+
+| Method                                 | EntityCount | Mean [μs]    | Error [μs]  | StdDev [μs] | Gen0      | Gen1     | Allocated [KB] |
+|--------------------------------------- |------------ |-------------:|------------:|------------:|----------:|---------:|---------------:|
+| SystemWithOneComponent                 | 100000      |  64,339.8 μs | 6,621.89 μs | 2,940.16 μs | 1000.0000 | 875.0000 |    16316.37 KB |
+| SystemWithTwoComponents                | 100000      |  95,035.2 μs | 7,611.05 μs | 3,379.35 μs | 1666.6667 | 666.6667 |    12386.78 KB |
+| SystemWithThreeComponents              | 100000      | 116,648.3 μs | 1,320.49 μs |   204.35 μs | 2400.0000 | 600.0000 |    17054.04 KB |
+| SystemTwoComponentsMultipleComposition | 100000      |     214.1 μs |    28.72 μs |    12.75 μs |   13.9160 |        - |       27.31 KB |
 > [!NOTE]
 > 1000μs = 0.001ms
 > 

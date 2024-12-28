@@ -32,7 +32,7 @@ namespace ECS
 
         static Secsy()
         {
-            componentIds = new IComponentId[128];
+            componentIds = new IComponentId[64];
             componentIdsComposition = new();
             nextCompId = 0;
         }
@@ -42,8 +42,8 @@ namespace ECS
         /// </summary>
         public Secsy()
         {
-            entComponents = [];
-            entityIds = [];
+            entComponents = new object?[100][];
+            entityIds = new EntityId[100];
             entsInactive = new();
             nextFreeEntId = 0;
         }
@@ -175,7 +175,12 @@ namespace ECS
 
             void createEntity(int c)
             {
-                NewEntity(comps);
+                ref var ent = ref NewEnt();
+                for (int i = 0, x = comps.Length; i < x; i++)
+                {
+                    var comp = comps[i];
+                    AddComponentId(ref ent, comp);
+                }
             }
         }
 
@@ -213,7 +218,7 @@ namespace ECS
             {
                 if (nextEntId >= entityIds.Length)
                 {
-                    IncreaseCapacity(nextEntId + 1L);
+                    IncreaseCapacity(nextEntId);
                 }
 
                 entityIds[nextEntId] = entId;
@@ -279,6 +284,7 @@ namespace ECS
         private void AddComponentId(ref EntityId ent, IComponentId comp)
         {
             if (ent.Has(comp)) throw new DuplicateComponentException(comp);
+            ArgumentNullException.ThrowIfNull(comp, nameof(comp));
             lock (_lock)
             {
                 var components = entComponents[ent.id];
@@ -452,7 +458,7 @@ namespace ECS
 
             lock (_lock)
             {
-                ent.compIdsMask = BitFlags128.Empty;
+                ent.compIdsMask = BitFlags64.Empty;
                 Array.Clear(entComponents[ent.id]);
             }
             entsInactive.Enqueue(entId);
@@ -670,7 +676,7 @@ namespace ECS
         /// </summary>
         public readonly long ID => id;
 
-        internal BitFlags128 compIdsMask;
+        internal BitFlags64 compIdsMask;
 
 
         /// <summary>
@@ -703,7 +709,7 @@ namespace ECS
         public void Remove()
         {
             man.Remove(this.id);
-            compIdsMask = BitFlags128.Empty;
+            compIdsMask = BitFlags64.Empty;
         }
 
         /// <summary>
@@ -734,7 +740,7 @@ namespace ECS
     /// </summary>
     public class Filter : IFilter
     {
-        internal BitFlags128 incIds = new(), excIds = new();
+        internal BitFlags64 incIds = new(), excIds = new();
 
 
         /// <summary>
@@ -794,6 +800,150 @@ namespace ECS
             bool incPass = incIds.HasAnyFlag(entity.compIdsMask);
             bool excPass = !excIds.HasAnyFlag(entity.compIdsMask);
             return incPass == true && excPass == true;
+        }
+    }
+
+    /// <summary>
+    /// 64 bit flags
+    /// </summary>
+    public struct BitFlags64
+    {
+        /// <summary>
+        /// Empty flags
+        /// </summary>
+        public static readonly BitFlags64 Empty = default;
+
+        private ulong flags;
+
+        /// <summary>
+        /// Sets the flag
+        /// </summary>
+        /// <param name="flagIndex"></param>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetFlag(int flagIndex)
+        {
+            if (flagIndex < 0 || flagIndex >= 64)
+                throw new ArgumentOutOfRangeException(nameof(flagIndex));
+
+            flags |= 1UL << flagIndex;
+        }
+
+        /// <summary>
+        /// Clears the flag
+        /// </summary>
+        /// <param name="flagIndex"></param>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void ClearFlag(int flagIndex)
+        {
+            if (flagIndex < 0 || flagIndex >= 64)
+                throw new ArgumentOutOfRangeException(nameof(flagIndex));
+
+            flags &= ~(1UL << flagIndex);
+        }
+
+        /// <summary>
+        /// Checks if the flag is set
+        /// </summary>
+        /// <param name="flagIndex"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public readonly bool HasFlag(int flagIndex)
+        {
+            if (flagIndex < 0 || flagIndex >= 64)
+                throw new ArgumentOutOfRangeException(nameof(flagIndex));
+
+            return (flags & (1UL << flagIndex)) != 0;
+        }
+
+        /// <summary>
+        /// Checks if any of the flags are set
+        /// </summary>
+        /// <param name="mask"></param>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public readonly bool HasAnyFlag(BitFlags64 mask)
+        {
+            return (flags & mask.flags) != 0;
+        }
+
+        /// <summary>
+        /// Checks if all of the flags are set
+        /// </summary>
+        /// <param name="mask"></param>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public readonly bool HasAllFlags(BitFlags64 mask)
+        {
+            return (flags & mask.flags) == mask.flags;
+        }
+
+        /// <summary>
+        /// <inheritdoc/>
+        /// </summary>
+        /// <param name="a"></param>
+        /// <param name="b"></param>
+        /// <returns></returns>
+        public static bool operator ==(BitFlags64 a, BitFlags64 b)
+        {
+            return a.flags == b.flags;
+        }
+
+        /// <summary>
+        /// <inheritdoc/>
+        /// </summary>
+        /// <param name="a"></param>
+        /// <param name="b"></param>
+        /// <returns></returns>
+        public static bool operator !=(BitFlags64 a, BitFlags64 b)
+        {
+            return a.flags != b.flags;
+        }
+
+        /// <summary>
+        /// <inheritdoc/>
+        /// </summary>
+        /// <param name="obj"></param>
+        /// <returns></returns>
+        public override bool Equals(object? obj)
+        {
+            if (obj is BitFlags64 other)
+            {
+                return this == other;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// <inheritdoc/>
+        /// </summary>
+        /// <returns></returns>
+        public override int GetHashCode()
+        {
+            return flags.GetHashCode();
+        }
+
+        /// <summary>
+        /// Clears all flags
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Clear()
+        {
+            flags = 0;
+        }
+
+        /// <summary>
+        /// Checks if the flags are empty
+        /// </summary>
+        public readonly bool IsEmpty
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                return flags == 0;
+            }
         }
     }
 
