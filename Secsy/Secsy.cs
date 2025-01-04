@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics.CodeAnalysis;
 using System.IO.MemoryMappedFiles;
 using System.Numerics;
 using System.Runtime.CompilerServices;
@@ -20,7 +21,7 @@ namespace ECS
     public class Secsy
     {
         internal static IComponentId[] componentIds;
-        internal static BitFlags128 componentIdsComposition;
+        internal static IBitFlags componentIdsComposition;
         internal EntityId[] entityIds;
         internal object?[][] entComponents;
         internal ConcurrentQueue<long> entsInactive;
@@ -33,7 +34,7 @@ namespace ECS
         static Secsy()
         {
             componentIds = new IComponentId[64];
-            componentIdsComposition = new();
+            componentIdsComposition = Composition.Current();
             nextCompId = 0;
         }
 
@@ -45,7 +46,7 @@ namespace ECS
             entComponents = new object?[100][];
             entityIds = new EntityId[100];
             entsInactive = new();
-            nextFreeEntId = 0;
+            nextFreeEntId = -1;
         }
 
         /// <summary>
@@ -98,21 +99,23 @@ namespace ECS
         /// <typeparam name="T">Must be a struct type</typeparam>
         /// <param name="defaultValue">Default value of <typeparamref name="T"/></param>
         /// <returns></returns>
+        /// <exception cref="BadComponentValueException">Thrown when <paramref name="defaultValue"/> is a bad type for components</exception>
         public static ComponentId<T> NewComponentId<T>(T? defaultValue = default)
         {
-            ComponentId<T> newCompId;
+            if (defaultValue is IComponentId or EntityId) throw new BadComponentValueException(defaultValue);
+            ComponentId<T> newComp;
             lock (componentIds)
             {
                 if (nextCompId == componentIds.Length) throw new MaxComponentsReachedException();
 
-                newCompId = new(nextCompId, defaultValue);
-                componentIds[nextCompId] = newCompId;
-                componentIdsComposition.SetFlag(newCompId.id);
+                newComp = new(nextCompId, defaultValue);
+                componentIds[nextCompId] = newComp;
+                componentIdsComposition.SetFlag(newComp.id);
             }
 
             nextCompId += 1;
 
-            return newCompId;
+            return newComp;
         }
 
         /// <summary>
@@ -213,7 +216,8 @@ namespace ECS
                 }
             }
 
-            EntityId entId = new(nextEntId, this, new BitFlags128());
+            EntityId entId = new(nextEntId, this);
+
             lock (_lock)
             {
                 if (nextEntId >= entityIds.Length)
@@ -261,6 +265,8 @@ namespace ECS
         /// <typeparam name="T"></typeparam>
         /// <param name="entId"></param>
         /// <param name="comp"></param>
+        /// <exception cref="InvalidEntityIdException" />
+        /// <exception cref="DuplicateComponentException" />
         public void AddComponent<T>(long entId, ComponentId<T> comp)
         {
             if (entId == 0) throw new InvalidEntityIdException(entId);
@@ -281,6 +287,13 @@ namespace ECS
             }
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="ent"></param>
+        /// <param name="comp"></param>
+        /// <exception cref="DuplicateComponentException"><paramref name="ent"/> already has <paramref name="comp"/></exception>
+        /// <exception cref="ArgumentNullException"><paramref name="comp"/> is null</exception>
         private void AddComponentId(ref EntityId ent, IComponentId comp)
         {
             if (ent.Has(comp)) throw new DuplicateComponentException(comp);
@@ -305,7 +318,9 @@ namespace ECS
         /// <param name="entId"></param>
         /// <param name="comp"></param>
         /// <param name="newValue"></param>
-        /// <exception cref="InvalidEntityIdException"></exception>
+        /// <exception cref="InvalidEntityIdException"><paramref name="entId"/> is 0</exception>
+        /// <exception cref="ComponentNotFoundException"><paramref name="entId"/> does not have <paramref name="comp"/></exception>
+        /// <exception cref="ArgumentNullException"><paramref name="comp"/> is null</exception>
         public void SetComponentValue(long entId, IComponentId comp, object? newValue)
         {
             if (entId == 0) throw new InvalidEntityIdException(entId);
@@ -333,7 +348,10 @@ namespace ECS
         /// <param name="entId"></param>
         /// <param name="comp"></param>
         /// <returns></returns>
-        /// <exception cref="InvalidEntityIdException"></exception>
+        /// <exception cref="InvalidEntityIdException"><paramref name="entId"/> is 0</exception>
+        /// <exception cref="ComponentNotFoundException"><paramref name="entId"/> does not have <paramref name="comp"/></exception>
+        /// <exception cref="ComponentTypeConflictException">component value is not <typeparamref name="T"/></exception>
+        /// <exception cref="ArgumentNullException"><paramref name="comp"/> is null</exception>
         public T GetComponentValue<T>(long entId, ComponentId<T> comp)
         {
             if (entId == 0) throw new InvalidEntityIdException(entId);
@@ -365,7 +383,10 @@ namespace ECS
         /// <param name="entId"></param>
         /// <param name="comp"></param>
         /// <returns></returns>
-        /// <exception cref="InvalidEntityIdException"></exception>
+        /// <exception cref="InvalidEntityIdException"><paramref name="entId"/> is 0</exception>
+        /// <exception cref="ComponentNotFoundException"><paramref name="entId"/> does not have <paramref name="comp"/></exception>
+        /// <exception cref="ComponentTypeConflictException">component value is not <typeparamref name="T"/></exception>
+        /// <exception cref="ArgumentNullException"><paramref name="comp"/> is null</exception>
         public ref object? GetComponentValue(long entId, IComponentId comp)
         {
             if (entId == 0) throw new InvalidEntityIdException(entId);
@@ -393,7 +414,8 @@ namespace ECS
         /// <param name="entId"></param>
         /// <param name="comp"></param>
         /// <returns></returns>
-        /// <exception cref="InvalidEntityIdException"></exception>
+        /// <exception cref="ComponentNotFoundException"><paramref name="entId"/> does not have <paramref name="comp"/></exception>
+        /// <exception cref="ArgumentNullException"><paramref name="comp"/> is null</exception>
         public bool RemoveComponent(long entId, IComponentId comp)
         {
             if (entId == 0) return true; // true because entId 0 should never have any components
@@ -422,7 +444,7 @@ namespace ECS
         /// </summary>
         /// <param name="entId"></param>
         /// <returns></returns>
-        /// <exception cref="InvalidEntityIdException"></exception>
+        /// <exception cref="InvalidEntityIdException">thrown from <see cref="Get(long)"/></exception>
         public IComponentId[] GetComponents(long entId)
         {
             if (entId == 0) return [];
@@ -458,7 +480,7 @@ namespace ECS
 
             lock (_lock)
             {
-                ent.compIdsMask = BitFlags128.Empty;
+                ent.compIdsMask = Composition.Current();
                 Array.Clear(entComponents[ent.id]);
             }
             entsInactive.Enqueue(entId);
@@ -470,17 +492,36 @@ namespace ECS
         /// <param name="filter"></param>
         /// <param name="fn"></param>
         /// <returns>Amount of entities that were processed</returns>
+        /// <exception cref="AggregateException">exceptions thrown by <paramref name="fn"/></exception>
+        /// <exception cref="ArgumentNullException"><paramref name="filter"/> is null</exception>
         public int Each(IFilter filter, EachEntity fn)
         {
-            if (filter == null) return 0;
+            ArgumentNullException.ThrowIfNull(filter, nameof(filter));
+            List<Exception> exceptions = [];
             var e = Filter(filter);
             int count = 0;
 
             while (e.MoveNext())
             {
-                fn(ref entityIds[e.Current]);
+                long eId = e.Current;
+                if (eId == 0) continue;
                 count++;
+                try
+                {
+                    fn(ref Get(eId));
+                }
+                catch (Exception ex)
+                {
+                    exceptions.Add(ex);
+                    if (exceptions.Count > 5)
+                    {
+                        exceptions.Add(new OverflowException("Too many exceptions"));
+                        break;
+                    }
+                }
             }
+
+            if (exceptions.Count > 0) throw new AggregateException(exceptions);
             return count;
         }
 
@@ -489,37 +530,35 @@ namespace ECS
         /// </summary>
         /// <param name="filter"></param>
         /// <returns></returns>
+        /// <exception cref="ArgumentNullException"><paramref name="filter"/> is null</exception>
         public IEnumerator<long> Filter(IFilter filter)
         {
-            if (filter == null) return Enumerable.Empty<long>().GetEnumerator();
+            ArgumentNullException.ThrowIfNull(filter, nameof(filter));
             ConcurrentBag<long> ents = [];
-            // yes we are doing this
-            // rationale: chunking the entityIds into ArraySegments and then parallelizing makes the operation more efficient and faster for huge amounts of entities
-            // the overhead of creating the ArraySegments is negligible compared to the performance gain
-            // the parallelization is also negligible overhead compared to the performance gain
-            var totalEntities = entityIds.Length;
+            var entIds = entityIds;
+            var totalEntities = entIds.Length;
             var processorCount = Environment.ProcessorCount;
+            var parallelForOpts = new ParallelOptions { MaxDegreeOfParallelism = processorCount };
             var chunkMaxSize = Math.Max(1, totalEntities / processorCount);
             var chunks = totalEntities / chunkMaxSize;
             var remain = totalEntities % chunkMaxSize;
             var offset = 0;
             for (int i = 0; i < chunks; i++)
             {
-                var seg = new ArraySegment<EntityId>(entityIds, offset, chunkMaxSize);
+                var seg = new ArraySegment<EntityId>(entIds, offset, chunkMaxSize);
                 offset += chunkMaxSize;
-                Parallel.ForEach(seg, filterBody);
+                Parallel.ForEach(seg, parallelForOpts, filterBody);
             }
             if (remain > 0)
             {
-                var seg = new ArraySegment<EntityId>(entityIds, offset, remain);
-                Parallel.ForEach(seg, filterBody);
+                var seg = new ArraySegment<EntityId>(entIds, offset, remain);
+                Parallel.ForEach(seg, parallelForOpts, filterBody);
             }
             return ents.GetEnumerator();
 
             void filterBody(EntityId ent)
             {
-                //ref EntityId ent = ref entityIds[i];
-                if (ent.compIdsMask?.IsEmpty == false || ent.id == 0) return;
+                if (ent.id == 0 || ent.compIdsMask?.IsEmpty == true) return;
                 if (filter.Apply(ent))
                     ents.Add(ent.id);
             }
@@ -532,7 +571,9 @@ namespace ECS
         {
             entsInactive.Clear();
             Array.Clear(entityIds);
+            Array.Resize(ref entityIds, 100);
             Array.Clear(entComponents);
+            Array.Resize(ref entComponents, 100);
         }
 
     }
@@ -662,11 +703,11 @@ namespace ECS
     {
         internal static EntityId Null = default;
 
-        internal EntityId(long id, Secsy man, IBitFlags flags)
+        internal EntityId(long id, Secsy man)
         {
             this.id = id;
             this.man = man;
-            compIdsMask = flags;
+            compIdsMask = Composition.Current();
         }
         internal Secsy man;
         internal long id;
@@ -678,6 +719,10 @@ namespace ECS
 
         internal IBitFlags compIdsMask;
 
+        /// <summary>
+        /// Returns the component id mask for this entity
+        /// </summary>
+        public readonly IBitFlags ComponentIdMask => new ReadOnlyBitFlags(compIdsMask);
 
         /// <summary>
         /// Returns if this entity is alive with components assigned to it
@@ -709,7 +754,7 @@ namespace ECS
         public void Remove()
         {
             man.Remove(this.id);
-            compIdsMask = BitFlags128.Empty;
+            compIdsMask = Composition.Current();
         }
 
         /// <summary>
@@ -719,6 +764,40 @@ namespace ECS
         public override string ToString()
         {
             return $"Entity[{id}]";
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="a"></param>
+        /// <param name="b"></param>
+        /// <returns></returns>
+        public static bool operator ==(EntityId a, EntityId b)
+        {
+            return a.id == b.id && a.compIdsMask == b.compIdsMask;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="a"></param>
+        /// <param name="b"></param>
+        /// <returns></returns>
+        public static bool operator !=(EntityId a, EntityId b)
+        {
+            return a.id != b.id || a.compIdsMask != b.compIdsMask;
+        }
+
+        /// <inheritdoc/>
+        public readonly override bool Equals([NotNullWhen(true)] object? obj)
+        {
+            return obj is EntityId yes && this == yes;
+        }
+
+        /// <inheritdoc/>
+        public readonly override int GetHashCode()
+        {
+            return HashCode.Combine(id, compIdsMask);
         }
     }
 
@@ -740,8 +819,15 @@ namespace ECS
     /// </summary>
     public class Filter : IFilter
     {
-        internal BitFlags128 incIds = new(), excIds = new();
-
+        internal IBitFlags incIds, excIds;
+        /// <summary>
+        /// Creates a new filter
+        /// </summary>
+        public Filter()
+        {
+            incIds = Composition.Current();
+            excIds = Composition.Current();
+        }
 
         /// <summary>
         /// Filter entities that <b>DO</b> have components specified in <paramref name="compIds"/>.
@@ -799,10 +885,11 @@ namespace ECS
         {
             bool incPass = incIds.HasAnyFlag(entity.compIdsMask);
             bool excPass = !excIds.HasAnyFlag(entity.compIdsMask);
-            return incPass == true && excPass == true;
+            return incPass && excPass;
         }
     }
 
+    #region BITFLAGS
     /// <summary>
     /// 
     /// </summary>
@@ -853,6 +940,16 @@ namespace ECS
         /// Checks if the flags are empty
         /// </summary>
         bool IsEmpty { get; }
+
+        int GetHashCode()
+        {
+            return Flags.GetHashCode();
+        }
+
+        bool Equals(object? obj)
+        {
+            return obj is IBitFlags other && this == other;
+        }
     }
 
     /// <summary>
@@ -1019,6 +1116,264 @@ namespace ECS
         }
     }
 
+
+    /// <summary>
+    /// 256 bit flags
+    /// </summary>
+    public struct BitFlags256 : IBitFlags
+    {
+        // This was generated by Github Copilot.  Yep, I was too lazy to write another instance out.
+
+        /// <summary>
+        /// Empty flags
+        /// </summary>
+        public static readonly BitFlags256 Empty = default;
+
+        private ulong flags1;
+        private ulong flags2;
+        private ulong flags3;
+        private ulong flags4;
+
+        /// <summary>
+        /// <inheritdoc/>
+        /// </summary>
+        public readonly ulong Flags => flags1 | flags2 | flags3 | flags4;
+
+        /// <summary>
+        /// Sets the flag
+        /// </summary>
+        /// <param name="flagIndex"></param>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetFlag(int flagIndex)
+        {
+            if (flagIndex < 0 || flagIndex >= 256)
+                throw new ArgumentOutOfRangeException(nameof(flagIndex));
+
+            if (flagIndex < 64)
+                flags1 |= 1UL << flagIndex;
+            else if (flagIndex < 128)
+                flags2 |= 1UL << (flagIndex - 64);
+            else if (flagIndex < 192)
+                flags3 |= 1UL << (flagIndex - 128);
+            else
+                flags4 |= 1UL << (flagIndex - 192);
+        }
+
+        /// <summary>
+        /// Clears the flag
+        /// </summary>
+        /// <param name="flagIndex"></param>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void ClearFlag(int flagIndex)
+        {
+            if (flagIndex < 0 || flagIndex >= 256)
+                throw new ArgumentOutOfRangeException(nameof(flagIndex));
+
+            if (flagIndex < 64)
+                flags1 &= ~(1UL << flagIndex);
+            else if (flagIndex < 128)
+                flags2 &= ~(1UL << (flagIndex - 64));
+            else if (flagIndex < 192)
+                flags3 &= ~(1UL << (flagIndex - 128));
+            else
+                flags4 &= ~(1UL << (flagIndex - 192));
+        }
+
+        /// <summary>
+        /// Checks if the flag is set
+        /// </summary>
+        /// <param name="flagIndex"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public readonly bool HasFlag(int flagIndex)
+        {
+            if (flagIndex < 0 || flagIndex >= 256)
+                throw new ArgumentOutOfRangeException(nameof(flagIndex));
+
+            if (flagIndex < 64)
+                return (flags1 & (1UL << flagIndex)) != 0;
+            else if (flagIndex < 128)
+                return (flags2 & (1UL << (flagIndex - 64))) != 0;
+            else if (flagIndex < 192)
+                return (flags3 & (1UL << (flagIndex - 128))) != 0;
+            else
+                return (flags4 & (1UL << (flagIndex - 192))) != 0;
+        }
+
+        /// <summary>
+        /// Checks if any of the flags are set
+        /// </summary>
+        /// <param name="mask"></param>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public readonly bool HasAnyFlag(IBitFlags mask)
+        {
+            var maskFlags = mask.Flags;
+            return (flags1 & maskFlags) != 0 || (flags2 & maskFlags) != 0 || (flags3 & maskFlags) != 0 || (flags4 & maskFlags) != 0;
+        }
+
+        /// <summary>
+        /// Checks if all of the flags are set
+        /// </summary>
+        /// <param name="mask"></param>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public readonly bool HasAllFlags(IBitFlags mask)
+        {
+            var maskFlag = mask.Flags;
+            return (flags1 & maskFlag) == maskFlag && (flags2 & maskFlag) == maskFlag && (flags3 & maskFlag) == maskFlag && (flags4 & maskFlag) == maskFlag;
+        }
+
+        /// <summary>
+        /// <inheritdoc/>
+        /// </summary>
+        /// <param name="a"></param>
+        /// <param name="b"></param>
+        /// <returns></returns>
+        public static bool operator ==(BitFlags256 a, IBitFlags b)
+        {
+            var bMask = b.Flags;
+            return a.flags1 == bMask && a.flags2 == bMask && a.flags3 == bMask && a.flags4 == bMask;
+        }
+
+        /// <summary>
+        /// <inheritdoc/>
+        /// </summary>
+        /// <param name="a"></param>
+        /// <param name="b"></param>
+        /// <returns></returns>
+        public static bool operator !=(BitFlags256 a, IBitFlags b)
+        {
+            var bMask = b.Flags;
+            return a.flags1 != bMask || a.flags2 != bMask || a.flags3 != bMask || a.flags4 != bMask;
+        }
+
+        /// <summary>
+        /// <inheritdoc/>
+        /// </summary>
+        /// <param name="obj"></param>
+        /// <returns></returns>
+        public override bool Equals(object? obj)
+        {
+            if (obj is IBitFlags other)
+            {
+                return this == other;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// <inheritdoc/>
+        /// </summary>
+        /// <returns></returns>
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(flags1, flags2, flags3, flags4);
+        }
+
+        /// <summary>
+        /// Clears all flags
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Clear()
+        {
+            flags1 = 0;
+            flags2 = 0;
+            flags3 = 0;
+            flags4 = 0;
+        }
+
+        /// <summary>
+        /// Checks if the flags are empty
+        /// </summary>
+        public readonly bool IsEmpty
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                return flags1 == 0 && flags2 == 0 && flags3 == 0 && flags4 == 0;
+            }
+        }
+    }
+
+
+    public readonly struct ReadOnlyBitFlags : IBitFlags
+    {
+        private readonly IBitFlags _bitFlags;
+
+        public ReadOnlyBitFlags(IBitFlags bitFlags)
+        {
+            _bitFlags = bitFlags ?? throw new ArgumentNullException(nameof(bitFlags));
+        }
+
+        public ulong Flags => _bitFlags.Flags;
+
+        public bool IsEmpty => _bitFlags.IsEmpty;
+
+        public void SetFlag(int flagIndex)
+        {
+            throw new InvalidOperationException("ReadOnlyBitFlags cannot modify flags.");
+        }
+
+        public void ClearFlag(int flagIndex)
+        {
+            throw new InvalidOperationException("ReadOnlyBitFlags cannot modify flags.");
+        }
+
+        public bool HasFlag(int flagIndex)
+        {
+            return _bitFlags.HasFlag(flagIndex);
+        }
+
+        public bool HasAnyFlag(IBitFlags mask)
+        {
+            return _bitFlags.HasAnyFlag(mask);
+        }
+
+        public bool HasAllFlags(IBitFlags mask)
+        {
+            return _bitFlags.HasAllFlags(mask);
+        }
+
+        public void Clear()
+        {
+            throw new InvalidOperationException("ReadOnlyBitFlags cannot modify flags.");
+        }
+    }
+    #endregion BITFLAGS
+
+
+    /// </summary>
+    public static class Composition
+    {
+        private static Type _bitFlagsType = typeof(BitFlags256);
+
+        /// <summary>
+        /// Sets the <see cref="IBitFlags"/> type to be used.
+        /// </summary>
+        /// <typeparam name="T">The type of <see cref="IBitFlags"/> to use.</typeparam>
+        public static void Use<T>() where T : IBitFlags, new()
+        {
+            _bitFlagsType = typeof(T);
+        }
+
+        /// </summary>
+        /// <returns></returns>
+        public static IBitFlags Current()
+        {
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
+#pragma warning disable CS8603 // Possible null reference return.
+            return (IBitFlags)Activator.CreateInstance(_bitFlagsType);
+#pragma warning restore CS8603 // Possible null reference return.
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
+        }
+    }
+
+    #region EXCEPTIONS
+
     [Serializable]
     public class SecsyException : Exception
     {
@@ -1077,7 +1432,16 @@ namespace ECS
         {
         }
 
-        public ComponentTypeConflictException(IComponentId component, object? value) : base($"expected value of type {component.GetType().FullName}, got {value?.GetType()}") { }
+        public ComponentTypeConflictException(IComponentId component, object? expected) : base($"expected value of type {component.GetType().FullName}, got {expected?.GetType()}") { }
+    }
+
+    public class BadComponentValueException : SecsyException
+    {
+        public BadComponentValueException()
+        {
+        }
+
+        public BadComponentValueException(object value) : base($"component value cannot be {value.GetType().FullName}") { }
     }
 
     /// <summary>
@@ -1107,4 +1471,5 @@ namespace ECS
     }
 
 #pragma warning restore CS1591 // Missing XML comment for publicly visible type or member
+    #endregion EXCEPTIONS
 }

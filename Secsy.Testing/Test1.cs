@@ -10,7 +10,8 @@ namespace ECS.Testing
     [TestClass]
     public class Test1
     {
-        static Secsy secsy = new();
+
+        static Secsy secsy;
 
         [ClassInitialize]
         public static void ClassInit(TestContext context)
@@ -27,6 +28,7 @@ namespace ECS.Testing
         [TestInitialize]
         public void TestInit()
         {
+            secsy = new();
             GenerateDefault(1);
         }
 
@@ -100,11 +102,22 @@ namespace ECS.Testing
             Assert.AreNotEqual(Components.TestComp1, Components.TestComp1Copy);
             Assert.AreNotEqual(Components.TestComp2, Components.TestComp2Copy);
             Assert.AreNotEqual(Components.TestComp3, Components.TestComp3Copy);
+            Assert.AreNotEqual(Secsy.NewComponentId("hello"), Secsy.NewComponentId("hello"));
+        }
+
+        [TestMethod]
+        public void ComponentBad()
+        {
+            var goodComp = Secsy.NewComponentId("good");
+            Assert.ThrowsException<BadComponentValueException>(() => Secsy.NewComponentId(goodComp));
+            var ent = secsy.NewEntity();
+            Assert.ThrowsException<BadComponentValueException>(() => Secsy.NewComponentId(ent));
         }
 
         [TestMethod]
         public void ComponentGet()
         {
+            secsy.Clear();
             var strComp = Secsy.NewComponentId<string>("");
             ref var ent = ref secsy.NewEntity(Components.TestComp1, Components.TestComp2, strComp);
             var comp2 = Components.TestComp2.SetValue(ent, new TestComp2 { Value = 3 });
@@ -134,6 +147,7 @@ namespace ECS.Testing
         [TestMethod]
         public void ComponentRemove()
         {
+            secsy.Clear();
             ref var ent = ref secsy.NewEntity(Components.TestComp1, Components.TestComp2);
             var id = ent.ID;
             secsy.RemoveComponent(id, Components.TestComp3).ShouldBeTrue();
@@ -141,11 +155,22 @@ namespace ECS.Testing
             Components.TestComp2.Has(ref ent).ShouldBeFalse();
         }
 
+        [TestMethod]
+        public void Compositions()
+        {
+            Composition.Use<BitFlags128>();
+            Composition.Current().ShouldBeOfType<BitFlags128>();
+            Composition.Use<BitFlags256>();
+            Composition.Current().ShouldBeOfType<BitFlags256>();
+        }
+
 
         [TestMethod]
         public void IterateFilter()
         {
-            secsy.Clear();
+            Composition.Use<BitFlags128>();
+
+            secsy = new();
             int amount = 5000;
             GenerateDefault(amount);
             secsy.Count.ShouldBe(amount);
@@ -162,21 +187,42 @@ namespace ECS.Testing
         // TODO TEST other component operations
 
         [TestMethod]
-        public void Filters()
+        public void Filters128()
         {
+            Composition.Use<BitFlags128>();
+            secsy = new();
+
             ref var ent = ref secsy.NewEntity(Components.TestComp1, Components.TestComp2);
             ent.Has(Components.TestComp2).ShouldBeTrue();
+            new Filter().Without(Components.TestComp1).Apply(ent).ShouldBeFalse();
             new Filter().Without(Components.TestComp2).Apply(ent).ShouldBeFalse();
             new Filter().With(Components.TestComp2).Apply(ent).ShouldBeTrue();
             new Filter().With(Components.TestComp1).Without(Components.TestComp2).Apply(ent).ShouldBeFalse();
+            new Filter().With(Components.TestComp1, Components.TestComp2).Apply(ent).ShouldBeTrue();
+        }
+
+        [TestMethod]
+        public void Filters256()
+        {
+            Composition.Use<BitFlags256>();
+            secsy = new();
+
+            ref var ent = ref secsy.NewEntity(Components.TestComp1, Components.TestComp2);
+            ent.Has(Components.TestComp2).ShouldBeTrue();
+            new Filter().Without(Components.TestComp1).Apply(ent).ShouldBeFalse();
+            new Filter().Without(Components.TestComp2).Apply(ent).ShouldBeFalse();
+            new Filter().With(Components.TestComp2).Apply(ent).ShouldBeTrue();
+            new Filter().With(Components.TestComp1).Without(Components.TestComp2).Apply(ent).ShouldBeFalse();
+            new Filter().With(Components.TestComp1, Components.TestComp2).Apply(ent).ShouldBeTrue();
         }
 
         [TestMethod]
         public void EachOp()
         {
-            secsy.Clear();
-            int amount = 100000;
-            GenerateDefault(amount);
+            Composition.Use<BitFlags128>();
+            secsy = new();
+
+            GenerateDefault(100_000);
             //Generate(amount, Components.TestComp1, Components.TestComp3);
 
             var filter = new Filter().With(Components.TestComp1, Components.TestComp2);//.Without(Components.TestComp3);
@@ -186,7 +232,8 @@ namespace ECS.Testing
             {
                 simCount++;
             });
-
+            simCount.ShouldNotBe(0);
+            count.ShouldNotBe(0);
             simCount.ShouldBe(count);
             Console.WriteLine($"{simCount}");
         }
@@ -195,7 +242,7 @@ namespace ECS.Testing
         public void SystemTwoComponentsMultipleComposition()
         {
             secsy.Clear();
-            GenerateDefault(100_000);
+            Generate(100_000, Components.TestComp1, Components.TestComp2);
             int amount = secsy.Each(new Filter().With(Components.TestComp1, Components.TestComp2).Without(Components.TestComp3, Components.TestComp4, Components.TestComp5, Components.TestComp6), eachEnt);
             Console.WriteLine($"{amount}");
             void eachEnt(ref EntityId ent)
