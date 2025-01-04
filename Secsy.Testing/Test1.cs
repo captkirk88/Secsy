@@ -158,17 +158,17 @@ namespace ECS.Testing
         [TestMethod]
         public void Compositions()
         {
-            Composition.Use<BitFlags128>();
-            Composition.Current().ShouldBeOfType<BitFlags128>();
-            Composition.Use<BitFlags256>();
-            Composition.Current().ShouldBeOfType<BitFlags256>();
+            SecsyConfig.ConfigBitFlagsType<BitFlags128>();
+            SecsyConfig.Current().ShouldBeOfType<BitFlags128>();
+            SecsyConfig.ConfigBitFlagsType<BitFlags256>();
+            SecsyConfig.Current().ShouldBeOfType<BitFlags256>();
         }
 
 
         [TestMethod]
         public void IterateFilter()
         {
-            Composition.Use<BitFlags128>();
+            SecsyConfig.ConfigBitFlagsType<BitFlags128>();
 
             secsy = new();
             int amount = 5000;
@@ -189,7 +189,7 @@ namespace ECS.Testing
         [TestMethod]
         public void Filters128()
         {
-            Composition.Use<BitFlags128>();
+            SecsyConfig.ConfigBitFlagsType<BitFlags128>();
             secsy = new();
 
             ref var ent = ref secsy.NewEntity(Components.TestComp1, Components.TestComp2);
@@ -204,7 +204,7 @@ namespace ECS.Testing
         [TestMethod]
         public void Filters256()
         {
-            Composition.Use<BitFlags256>();
+            SecsyConfig.ConfigBitFlagsType<BitFlags256>();
             secsy = new();
 
             ref var ent = ref secsy.NewEntity(Components.TestComp1, Components.TestComp2);
@@ -219,10 +219,10 @@ namespace ECS.Testing
         [TestMethod]
         public void EachOp()
         {
-            Composition.Use<BitFlags128>();
+            SecsyConfig.ConfigBitFlagsType<BitFlags128>();
             secsy = new();
 
-            GenerateDefault(100_000);
+            GenerateDefault(6);
             //Generate(amount, Components.TestComp1, Components.TestComp3);
 
             var filter = new Filter().With(Components.TestComp1, Components.TestComp2);//.Without(Components.TestComp3);

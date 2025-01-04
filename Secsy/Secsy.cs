@@ -33,8 +33,8 @@ namespace ECS
 
         static Secsy()
         {
-            componentIds = new IComponentId[64];
-            componentIdsComposition = Composition.Current();
+            componentIds = new IComponentId[SecsyConfig.maxCompIds];
+            componentIdsComposition = SecsyConfig.Current();
             nextCompId = 0;
         }
 
@@ -46,7 +46,7 @@ namespace ECS
             entComponents = new object?[100][];
             entityIds = new EntityId[100];
             entsInactive = new();
-            nextFreeEntId = -1;
+            nextFreeEntId = 0;
         }
 
         /// <summary>
@@ -100,6 +100,7 @@ namespace ECS
         /// <param name="defaultValue">Default value of <typeparamref name="T"/></param>
         /// <returns></returns>
         /// <exception cref="BadComponentValueException">Thrown when <paramref name="defaultValue"/> is a bad type for components</exception>
+        /// <exception cref="MaxComponentsReachedException">Max allowed component ids reached</exception>
         public static ComponentId<T> NewComponentId<T>(T? defaultValue = default)
         {
             if (defaultValue is IComponentId or EntityId) throw new BadComponentValueException(defaultValue);
@@ -178,12 +179,7 @@ namespace ECS
 
             void createEntity(int c)
             {
-                ref var ent = ref NewEnt();
-                for (int i = 0, x = comps.Length; i < x; i++)
-                {
-                    var comp = comps[i];
-                    AddComponentId(ref ent, comp);
-                }
+                NewEntity(comps);
             }
         }
 
@@ -192,7 +188,7 @@ namespace ECS
             lock (_lock)
             {
                 var len = entityIds.LongLength;
-                var newSize = (int)(len + Math.Max(capSize, 10_000));
+                var newSize = (int)(len + Math.Max(capSize, 100));
 
                 Array.Resize(ref entityIds, newSize);
                 Array.Resize(ref entComponents, newSize);
@@ -294,22 +290,27 @@ namespace ECS
         /// <param name="comp"></param>
         /// <exception cref="DuplicateComponentException"><paramref name="ent"/> already has <paramref name="comp"/></exception>
         /// <exception cref="ArgumentNullException"><paramref name="comp"/> is null</exception>
-        private void AddComponentId(ref EntityId ent, IComponentId comp)
+        private void AddComponentIds(ref EntityId ent, params IComponentId[] comps)
         {
-            if (ent.Has(comp)) throw new DuplicateComponentException(comp);
-            ArgumentNullException.ThrowIfNull(comp, nameof(comp));
-            lock (_lock)
+            ref var components = ref entComponents[ent.id];
+            for (int i = 0, x = comps.Length; i < x; i++)
             {
-                var components = entComponents[ent.id];
+                var comp = comps[i];
+                if (ent.Has(comp)) throw new DuplicateComponentException(comp);
+                ArgumentNullException.ThrowIfNull(comp, nameof(comp));
+
+                ent.compIdsMask.SetFlag(comp.Id);
                 if (components.Length <= comp.Id)
                 {
                     Array.Resize(ref components, comp.Id + 1);
                 }
-
-                components[comp.Id] = comp.DefaultValue;
-                ent.compIdsMask.SetFlag(comp.Id);
-                entComponents[ent.id] = components;
+                lock (_lock)
+                {
+                    components[comp.Id] = comp.DefaultValue;
+                    entComponents[ent.id] = components;
+                }
             }
+
         }
 
         /// <summary>
@@ -480,7 +481,7 @@ namespace ECS
 
             lock (_lock)
             {
-                ent.compIdsMask = Composition.Current();
+                ent.compIdsMask = SecsyConfig.Current();
                 Array.Clear(entComponents[ent.id]);
             }
             entsInactive.Enqueue(entId);
@@ -558,7 +559,7 @@ namespace ECS
 
             void filterBody(EntityId ent)
             {
-                if (ent.id == 0 || ent.compIdsMask?.IsEmpty == true) return;
+                if (ent.IsAlive == false) return;
                 if (filter.Apply(ent))
                     ents.Add(ent.id);
             }
@@ -701,16 +702,16 @@ namespace ECS
     /// </summary>
     public struct EntityId
     {
-        internal static EntityId Null = default;
+        internal static EntityId Null = new();
 
         internal EntityId(long id, Secsy man)
         {
             this.id = id;
             this.man = man;
-            compIdsMask = Composition.Current();
+            compIdsMask = SecsyConfig.Current();
         }
-        internal Secsy man;
-        internal long id;
+        internal readonly Secsy man;
+        internal readonly long id;
 
         /// <summary>
         /// Returns entity id
@@ -727,7 +728,7 @@ namespace ECS
         /// <summary>
         /// Returns if this entity is alive with components assigned to it
         /// </summary>
-        public readonly bool IsAlive => compIdsMask != null && compIdsMask.IsEmpty == false;
+        public readonly bool IsAlive => id > 0 && compIdsMask != null && compIdsMask.IsEmpty == false;
 
         /// <summary>
         /// Checks if this entity has <paramref name="componentId"/>
@@ -754,7 +755,7 @@ namespace ECS
         public void Remove()
         {
             man.Remove(this.id);
-            compIdsMask = Composition.Current();
+            compIdsMask.Clear();
         }
 
         /// <summary>
@@ -825,8 +826,8 @@ namespace ECS
         /// </summary>
         public Filter()
         {
-            incIds = Composition.Current();
-            excIds = Composition.Current();
+            incIds = SecsyConfig.Current();
+            excIds = SecsyConfig.Current();
         }
 
         /// <summary>
@@ -890,8 +891,10 @@ namespace ECS
     }
 
     #region BITFLAGS
+
+
     /// <summary>
-    /// 
+    /// Interface for bit flags
     /// </summary>
     public interface IBitFlags
     {
@@ -901,18 +904,21 @@ namespace ECS
         /// <param name="flagIndex"></param>
         /// <exception cref="ArgumentOutOfRangeException"></exception>
         void SetFlag(int flagIndex);
+
         /// <summary>
         /// Checks if the flag is set
         /// </summary>
         /// <param name="flagIndex"></param>
         /// <returns></returns>
         bool HasFlag(int flagIndex);
+
         /// <summary>
         /// Checks if any of the flags are set
         /// </summary>
         /// <param name="mask"></param>
         /// <returns></returns>
         bool HasAnyFlag(IBitFlags mask);
+
         /// <summary>
         /// Checks if all of the flags are set
         /// </summary>
@@ -941,11 +947,13 @@ namespace ECS
         /// </summary>
         bool IsEmpty { get; }
 
+        /// <inheritdoc/>
         int GetHashCode()
         {
             return Flags.GetHashCode();
         }
 
+        /// <inheritdoc/>
         bool Equals(object? obj)
         {
             return obj is IBitFlags other && this == other;
@@ -978,6 +986,7 @@ namespace ECS
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetFlag(int flagIndex)
         {
+
             if (flagIndex < 0 || flagIndex >= 128)
                 throw new ArgumentOutOfRangeException(nameof(flagIndex));
 
@@ -1347,21 +1356,48 @@ namespace ECS
 
 
     /// </summary>
-    public static class Composition
+    public static class SecsyConfig
     {
         private static Type _bitFlagsType = typeof(BitFlags256);
+        internal static int maxCompIds = 128;
 
         /// <summary>
         /// Sets the <see cref="IBitFlags"/> type to be used.
         /// </summary>
         /// <typeparam name="T">The type of <see cref="IBitFlags"/> to use.</typeparam>
-        public static void Use<T>() where T : IBitFlags, new()
+        public static void ConfigBitFlagsType<T>() where T : IBitFlags, new()
         {
             _bitFlagsType = typeof(T);
         }
 
+        /// <summary>
+        /// Sets the <see cref="IBitFlags"/> type to be used.
         /// </summary>
-        /// <returns></returns>
+        public static void ConfigBitFlagsType(Type bitFlagsType)
+        {
+            if (bitFlagsType == null)
+                throw new ArgumentNullException(nameof(bitFlagsType));
+            if (bitFlagsType.GetInterface(nameof(IBitFlags)) == null)
+                throw new ArgumentException("Type must implement IBitFlags", nameof(bitFlagsType));
+            _bitFlagsType = bitFlagsType;
+        }
+
+        /// <summary>
+        /// Sets the maximum amount of <see cref="ComponentId{T}"/>s that can be created.
+        /// </summary>
+        /// <param name="maxComponentIds"></param>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        public static void ConfigMaxComponentIds(int maxComponentIds)
+        {
+            if (maxComponentIds < 1)
+                throw new ArgumentOutOfRangeException(nameof(maxComponentIds), "Max component ids must be greater than 0");
+            maxCompIds = Math.Max(128, maxComponentIds);
+        }
+
+        /// <summary>
+        /// Creates and returns a new instance of the currently configured <see cref="IBitFlags"/> type.
+        /// </summary>
+        /// <returns>A new instance of the <see cref="IBitFlags"/> type.</returns>
         public static IBitFlags Current()
         {
 #pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
