@@ -9,9 +9,14 @@ using System.Runtime.CompilerServices;
 using System.Runtime.Serialization;
 using System.Text;
 using System.Text.Json.Serialization;
+using EID = ulong;
 
 namespace ECS
 {
+    /// <summary>
+    /// Delegate for <see cref="Secsy.Each(IFilter, EachEntity)"/>
+    /// </summary>
+    /// <param name="entId"></param>
     public delegate void EachEntity(ref EntityId entId);
 
     /// <summary>
@@ -24,10 +29,10 @@ namespace ECS
         internal static IBitFlags componentIdsComposition;
         internal EntityId[] entityIds;
         internal object?[][] entComponents;
-        internal ConcurrentQueue<long> entsInactive;
+        internal ConcurrentQueue<EID> entsInactive;
 
         static int nextCompId;
-        internal long nextFreeEntId;
+        internal EID nextFreeEntId;
 
         private readonly object _lock = new();
 
@@ -159,27 +164,30 @@ namespace ECS
         {
             if (amount <= 0) return;
             IncreaseCapacity(amount);
-            int compLen = comps.Length;
+
             int processorCount = Environment.ProcessorCount;
-            int chunkSize = (amount + processorCount - 1) / processorCount;
-            var chunks = amount / chunkSize;
-            var remain = amount % chunkSize;
 
-            ParallelOptions options = new() { MaxDegreeOfParallelism = processorCount };
+            Span<IComponentId> compsLocal = comps;
 
-            for (int i = 0; i < chunks; i++)
+            for (int j = 0; j < amount; j++)
             {
-                Parallel.For(0, chunkSize, options, createEntity);
-            }
+                ref EntityId entId = ref NewEnt();
+                if (comps.Length > 0)
+                {
+                    Span<object?> entComponentsLocal = entComponents[entId.id];
+                    for (int i = 0, x = compsLocal.Length; i < x; i++)
+                    {
+                        var comp = compsLocal[i] ?? throw new ArgumentNullException($"comps[{i}]");
+                        var compId = comp.Id;
 
-            if (remain > 0)
-            {
-                Parallel.For(0, remain, options, createEntity);
-            }
+                        if (componentIdsComposition.HasFlag(compId) == false)
+                            throw new UnregisteredComponentException(comp);
 
-            void createEntity(int c)
-            {
-                NewEntity(comps);
+                        entId.compIdsMask.SetFlag(compId);
+
+                        entComponentsLocal[compId] = comp.DefaultValue;
+                    }
+                }
             }
         }
 
@@ -197,7 +205,7 @@ namespace ECS
 
         internal ref EntityId NewEnt()
         {
-            long nextEntId = 0;
+            EID nextEntId = 0;
             if (!entsInactive.IsEmpty)
             {
                 entsInactive.TryDequeue(out nextEntId);
@@ -216,9 +224,9 @@ namespace ECS
 
             lock (_lock)
             {
-                if (nextEntId >= entityIds.Length)
+                if ((long)nextEntId >= entityIds.Length)
                 {
-                    IncreaseCapacity(nextEntId);
+                    IncreaseCapacity((long)nextEntId);
                 }
 
                 entityIds[nextEntId] = entId;
@@ -242,7 +250,7 @@ namespace ECS
         /// <param name="id"></param>
         /// <returns></returns>
         /// <exception cref="InvalidEntityIdException"></exception>
-        public ref EntityId Get(long id)
+        public ref EntityId Get(EID id)
         {
             if (id == 0) throw new InvalidEntityIdException(id);
             try
@@ -263,7 +271,7 @@ namespace ECS
         /// <param name="comp"></param>
         /// <exception cref="InvalidEntityIdException" />
         /// <exception cref="DuplicateComponentException" />
-        public void AddComponent<T>(long entId, ComponentId<T> comp)
+        public void AddComponent<T>(EID entId, ComponentId<T> comp)
         {
             if (entId == 0) throw new InvalidEntityIdException(entId);
             ref var ent = ref Get(entId);
@@ -287,7 +295,7 @@ namespace ECS
         /// 
         /// </summary>
         /// <param name="ent"></param>
-        /// <param name="comp"></param>
+        /// <param name="comps"></param>
         /// <exception cref="DuplicateComponentException"><paramref name="ent"/> already has <paramref name="comp"/></exception>
         /// <exception cref="ArgumentNullException"><paramref name="comp"/> is null</exception>
         private void AddComponentIds(ref EntityId ent, params IComponentId[] comps)
@@ -322,7 +330,7 @@ namespace ECS
         /// <exception cref="InvalidEntityIdException"><paramref name="entId"/> is 0</exception>
         /// <exception cref="ComponentNotFoundException"><paramref name="entId"/> does not have <paramref name="comp"/></exception>
         /// <exception cref="ArgumentNullException"><paramref name="comp"/> is null</exception>
-        public void SetComponentValue(long entId, IComponentId comp, object? newValue)
+        public void SetComponentValue(EID entId, IComponentId comp, object? newValue)
         {
             if (entId == 0) throw new InvalidEntityIdException(entId);
             ArgumentNullException.ThrowIfNull(comp, nameof(comp));
@@ -353,7 +361,7 @@ namespace ECS
         /// <exception cref="ComponentNotFoundException"><paramref name="entId"/> does not have <paramref name="comp"/></exception>
         /// <exception cref="ComponentTypeConflictException">component value is not <typeparamref name="T"/></exception>
         /// <exception cref="ArgumentNullException"><paramref name="comp"/> is null</exception>
-        public T GetComponentValue<T>(long entId, ComponentId<T> comp)
+        public T GetComponentValue<T>(EID entId, ComponentId<T> comp)
         {
             if (entId == 0) throw new InvalidEntityIdException(entId);
             ArgumentNullException.ThrowIfNull(comp, nameof(comp));
@@ -388,7 +396,7 @@ namespace ECS
         /// <exception cref="ComponentNotFoundException"><paramref name="entId"/> does not have <paramref name="comp"/></exception>
         /// <exception cref="ComponentTypeConflictException">component value is not <typeparamref name="T"/></exception>
         /// <exception cref="ArgumentNullException"><paramref name="comp"/> is null</exception>
-        public ref object? GetComponentValue(long entId, IComponentId comp)
+        public ref object? GetComponentValue(EID entId, IComponentId comp)
         {
             if (entId == 0) throw new InvalidEntityIdException(entId);
             ArgumentNullException.ThrowIfNull(comp, nameof(comp));
@@ -417,7 +425,7 @@ namespace ECS
         /// <returns></returns>
         /// <exception cref="ComponentNotFoundException"><paramref name="entId"/> does not have <paramref name="comp"/></exception>
         /// <exception cref="ArgumentNullException"><paramref name="comp"/> is null</exception>
-        public bool RemoveComponent(long entId, IComponentId comp)
+        public bool RemoveComponent(EID entId, IComponentId comp)
         {
             if (entId == 0) return true; // true because entId 0 should never have any components
             ArgumentNullException.ThrowIfNull(comp, nameof(comp));
@@ -446,7 +454,7 @@ namespace ECS
         /// <param name="entId"></param>
         /// <returns></returns>
         /// <exception cref="InvalidEntityIdException">thrown from <see cref="Get(long)"/></exception>
-        public IComponentId[] GetComponents(long entId)
+        public IComponentId[] GetComponents(EID entId)
         {
             if (entId == 0) return [];
             ref EntityId ent = ref Get(entId);
@@ -475,7 +483,7 @@ namespace ECS
         /// Sets entity with <paramref name="entId"/> to be inactive.  It will be reused later if a new entity is created.
         /// </summary>
         /// <param name="entId"></param>
-        public void Remove(long entId)
+        public void Remove(EID entId)
         {
             ref EntityId ent = ref Get(entId);
 
@@ -504,7 +512,7 @@ namespace ECS
 
             while (e.MoveNext())
             {
-                long eId = e.Current;
+                EID eId = e.Current;
                 if (eId == 0) continue;
                 count++;
                 try
@@ -532,10 +540,10 @@ namespace ECS
         /// <param name="filter"></param>
         /// <returns></returns>
         /// <exception cref="ArgumentNullException"><paramref name="filter"/> is null</exception>
-        public IEnumerator<long> Filter(IFilter filter)
+        public IEnumerator<EID> Filter(IFilter filter)
         {
             ArgumentNullException.ThrowIfNull(filter, nameof(filter));
-            ConcurrentBag<long> ents = [];
+            ConcurrentBag<EID> ents = [];
             var entIds = entityIds;
             var totalEntities = entIds.Length;
             var processorCount = Environment.ProcessorCount;
@@ -704,19 +712,19 @@ namespace ECS
     {
         internal static EntityId Null = new();
 
-        internal EntityId(long id, Secsy man)
+        internal EntityId(EID id, Secsy man)
         {
             this.id = id;
             this.man = man;
             compIdsMask = SecsyConfig.Current();
         }
         internal readonly Secsy man;
-        internal readonly long id;
+        internal readonly EID id;
 
         /// <summary>
         /// Returns entity id
         /// </summary>
-        public readonly long ID => id;
+        public readonly EID ID => id;
 
         internal IBitFlags compIdsMask;
 
@@ -961,7 +969,7 @@ namespace ECS
     }
 
     /// <summary>
-    /// 128 bit flags
+    /// 128 bit flags or 128 components per entity
     /// </summary>
     public struct BitFlags128 : IBitFlags
     {
@@ -1127,7 +1135,7 @@ namespace ECS
 
 
     /// <summary>
-    /// 256 bit flags
+    /// 256 bit flags or 256 components per entity
     /// </summary>
     public struct BitFlags256 : IBitFlags
     {
@@ -1501,7 +1509,7 @@ namespace ECS
     {
         public InvalidEntityIdException() { }
 
-        public InvalidEntityIdException(long entId) : base(entId.ToString())
+        public InvalidEntityIdException(EID entId) : base(entId.ToString())
         {
         }
     }

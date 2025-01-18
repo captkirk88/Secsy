@@ -21,7 +21,7 @@ namespace ECS.Testing
         public int EntityCount { get; set; }
 
         [Benchmark]
-        public void CreateEntities()
+        public void CreateEntitiesWithSixComponents()
         {
             secsy.NewEntities(EntityCount, Components.TestComp1, Components.TestComp2, Components.TestComp3, Components.TestComp4, Components.TestComp5, Components.TestComp6);
         }

@@ -156,7 +156,7 @@ namespace ECS.Testing
         }
 
         [TestMethod]
-        public void Compositions()
+        public void Config()
         {
             SecsyConfig.ConfigBitFlagsType<BitFlags128>();
             SecsyConfig.Current().ShouldBeOfType<BitFlags128>();
